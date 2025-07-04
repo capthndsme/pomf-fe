@@ -1,8 +1,13 @@
-export interface FileType {
-    id: string;
-    name: string;
-    type: "file" | "folder";
-    parentId: string | null;
-    createdAt: string;
-    updatedAt: string;
+type FileType = 
+  | "IMAGE" 
+  | "VIDEO"
+  | "AUDIO"
+  | "DOCUMENT"
+  | "PLAINTEXT"
+  | "BINARY"
+
+export type {
+  FileType
 }
+
+

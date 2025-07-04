@@ -1,6 +1,6 @@
 import FullsizeSpinner from "@/components/FullsizeSpinner";
 import { useAvailableServers } from "@/hooks/useAvailableServers";
-import { createContext, useContext, useState, useMemo } from "react";
+import { createContext, useContext, useState, useMemo, useEffect } from "react";
 import type ServerShard from "types/response/ServerShard";
 
 interface CurrentServerContext {
@@ -23,7 +23,12 @@ export const CurrentServerProvider = ({ children }: { children: React.ReactNode 
       }),
       [currentList?.data?.length, currentList.dataUpdatedAt, currentServer?.id, setCurrentServer]
    );
-   console.log('got server list: ', currentList.data)
+ 
+   useEffect(() => {
+    if (currentList.data) {
+      setCurrentServer(currentList.data[0]);
+    }
+   }, [!!currentList.data])
    if (!currentList.data) {
       return <FullsizeSpinner  text="Getting config..."/>;
    }

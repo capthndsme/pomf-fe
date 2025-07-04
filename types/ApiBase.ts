@@ -1,4 +1,4 @@
-import { ValidApiMessages } from "./ApiMessages.js"
+import { type ValidApiMessages } from "./ApiMessages.js"
 
 type ApiBaseSuccess<T> = {
   data: T,

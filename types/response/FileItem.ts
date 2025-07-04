@@ -1,4 +1,4 @@
-import { FileType } from "../FileType"
+import { type FileType } from "../FileType"
 import User from "../User"
 import ServerShard from "./ServerShard"
 
