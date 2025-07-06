@@ -73,7 +73,7 @@ const uploadSingleChunk = async (
 
    try {
       const formData = new FormData();
-      formData.append("file[]", chunk, `chunk-${chunkIndex}`);
+      formData.append("file[]", chunk, `chunk-${chunkIndex}.bin`);
 
       const queryParams = new URLSearchParams({
          uploadId: meta.uploadId,
