@@ -119,16 +119,16 @@ export const UploaderProvider = ({ children }: { children: ReactNode }) => {
     
     // Adjust settings based on file size
     if (largestFile >= 500 * 1024 * 1024) { // 500MB+
-      chunkSize = 10 * 1024 * 1024; // 10MB chunks
-      maxConcurrency = 10;
+      chunkSize = 20 * 1024 * 1024; // 10MB chunks
+      maxConcurrency = 4;
     } else if (largestFile >= 100 * 1024 * 1024) { // 100MB+
-      chunkSize = 8 * 1024 * 1024; // 8MB chunks
-      maxConcurrency = 8;
+      chunkSize = 15 * 1024 * 1024; // 8MB chunks
+      maxConcurrency = 3;
     } else if (largestFile >= 50 * 1024 * 1024) { // 50MB+
-      chunkSize = 5 * 1024 * 1024; // 5MB chunks
-      maxConcurrency = 6;
+      chunkSize = 10 * 1024 * 1024; // 5MB chunks
+      maxConcurrency = 2;
     } else {
-      maxConcurrency = 4; // Smaller files don't need as many threads
+      maxConcurrency = 1; // Smaller files don't need as many threads
     }
     
     return {

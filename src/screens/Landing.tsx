@@ -76,13 +76,13 @@ const Landing = () => {
                   {uploadedFiles.map((file) => (
                      <div key={file.id} className="mb-4 bg-blue-800/30 px-2 py-1 rounded-md">
                         <p className="text-lg font-semibold">{file.originalFileName}</p>
-                        <TouchableLink
-                           to={file.fileKey ? `https://${file.serverShard?.domain}/${file.fileKey}` : undefined}
+                        <a
+                           href={file.fileKey ? `https://${file.serverShard?.domain}/${file.fileKey}` : undefined}
                            target="_blank"
                            className="text-blue-400 hover:underline block py-2"
                         >
                            Direct: {`https://${file.serverShard?.domain}/${file.fileKey}`}
-                        </TouchableLink>
+                        </a>
                         <TouchableLink
                            to={file.fileKey ? `/s/${UUIDService.encode(file.id)}` : undefined}
                            target="_blank"
