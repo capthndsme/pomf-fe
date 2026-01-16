@@ -46,12 +46,12 @@ const StatusPage = () => {
       }, 30000);
       return () => clearInterval(interval);
    }, []);
-   
+
    return (
-      <div className="w-full max-w-5xl mx-auto p-2 pt-4 pb-12">
-        <Helmet>
-          <title>{BRANDING} - Status Page</title>
-        </Helmet>
+      <div className="w-full max-w-5xl mx-auto p-2 pt-20 pb-12">
+         <Helmet>
+            <title>{BRANDING} - Status Page</title>
+         </Helmet>
          <AggregatedStatus server={serversProvider.data ?? []} />
 
          <h1 className="mt-8 text-2xl font-bold mb-4">Individual Node Status</h1>
@@ -100,7 +100,7 @@ const RenderServerItem = ({ server }: { server: ServerShard }) => {
       }
       return `${diffSeconds}s ago ✅`;
    };
-   
+
    return (
       <tr key={server.id} className="border-t border-blue-800">
          <td className="px-4 py-2">{server.domain}</td>
@@ -122,7 +122,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
 
    useEffect(() => {
       if (!server.length) return;
-      
+
       const aggregated = {
          totalSpaceFree: server.reduce((acc, s) => acc + (s.spaceFree ?? 0), 0),
          totalSpaceTotal: server.reduce((acc, s) => acc + (s.spaceTotal ?? 0), 0),
@@ -133,7 +133,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
          avgCpuUse: server.reduce((acc, s) => acc + (s.cpuUse ?? 0), 0) / server.length,
          time: new Date(),
       };
-      
+
       // Store per-node data for individual node charts
       const perNodeData: PerNodeData[] = server.map(s => ({
          nodeId: s.id,
@@ -143,13 +143,13 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
          bwOut: s.bwOut ?? 0,
          time: new Date(),
       }));
-      
+
       // Keep only last 50 data points to prevent memory issues
       setHistory((prev) => {
          const updated = [...prev, aggregated];
          return updated.slice(-50);
       });
-      
+
       setPerNodeHistory((prev) => {
          const updated = [...prev, ...perNodeData];
          return updated.slice(-50 * server.length); // Keep last 50 entries per node
@@ -196,7 +196,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
    // CPU per-node + average
    const cpuChart: ChartSeries[] = useMemo(() => {
       const nodeData = new Map<number, ChartDataPoint[]>();
-      
+
       // Group per-node data by node ID
       perNodeHistory.forEach(entry => {
          if (!nodeData.has(entry.nodeId)) {
@@ -209,7 +209,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
       });
 
       const series: ChartSeries[] = [];
-      
+
       // Add individual node series
       nodeData.forEach((data, nodeId) => {
          const node = server.find(s => s.id === nodeId);
@@ -219,7 +219,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
             data: data,
          });
       });
-      
+
       // Add average CPU
       series.push({
          label: "Average CPU",
@@ -228,7 +228,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
             secondary: d.avgCpuUse / 100, // Convert to percentage
          })),
       });
-      
+
       return series;
    }, [perNodeHistory, history, server]);
 
@@ -236,7 +236,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
    const bandwidthChart: ChartSeries[] = useMemo(() => {
       const nodeInData = new Map<number, ChartDataPoint[]>();
       const nodeOutData = new Map<number, ChartDataPoint[]>();
-      
+
       // Group per-node data by node ID
       perNodeHistory.forEach(entry => {
          if (!nodeInData.has(entry.nodeId)) {
@@ -254,7 +254,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
       });
 
       const series: ChartSeries[] = [];
-      
+
       // Add individual node series
       nodeInData.forEach((data, nodeId) => {
          const node = server.find(s => s.id === nodeId);
@@ -264,7 +264,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
             data: data,
          });
       });
-      
+
       nodeOutData.forEach((data, nodeId) => {
          const node = server.find(s => s.id === nodeId);
          const domain = node?.domain || nodeId;
@@ -273,7 +273,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
             data: data,
          });
       });
-      
+
       // Add average bandwidth in and out
       series.push({
          label: "Average In",
@@ -282,7 +282,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
             secondary: d.totalBwIn / server.length / 1024 / 1024, // Average per node in Mbps
          })),
       });
-      
+
       series.push({
          label: "Average Out",
          data: history.map((d) => ({
@@ -290,7 +290,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
             secondary: d.totalBwOut / server.length / 1024 / 1024, // Average per node in Mbps
          })),
       });
-      
+
       return series;
    }, [perNodeHistory, history, server]);
 
@@ -352,7 +352,7 @@ const AggregatedStatus = ({ server }: { server: ServerShard[] }) => {
                   <p className="text-lg">{((latest?.avgCpuUse ?? 0) / 100).toFixed(2)}%</p>
                </div>
             </div>
-            
+
             {history.length > 0 && (
                <div className="space-y-6">
                   {/* Hard Drive Usage Chart */}

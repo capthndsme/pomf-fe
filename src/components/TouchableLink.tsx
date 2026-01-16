@@ -8,7 +8,8 @@ export const TouchableLink = ({
    className,
    hitSlop,
    target,
-   download
+   download,
+   onClick
 }: {
    to?: string | number;
    children: React.ReactNode;
@@ -16,6 +17,7 @@ export const TouchableLink = ({
    hitSlop?: ComponentProps<typeof TouchableOpacity>["hitSlop"];
    target?: ComponentProps<"a">["target"];
    download?: ComponentProps<"a">["download"];
+   onClick?: () => void;
 }) => {
    const navigate = useNavigate();
    return (
@@ -23,6 +25,7 @@ export const TouchableLink = ({
          className={className}
          hitSlop={hitSlop}
          onPress={() => {
+            onClick?.();
             if (download) {
                const link = document.createElement('a');
                link.href = to as string;
@@ -31,12 +34,12 @@ export const TouchableLink = ({
                link.click();
                document.body.removeChild(link);
             } else if (target && typeof to === 'string') {
-              window.open(to, target);
+               window.open(to, target);
             } else if (to) {
-              navigate(to as string);
+               navigate(to as string);
             }
-            
-          }}
+
+         }}
       >
          {children}
       </TouchableOpacity>

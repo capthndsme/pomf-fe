@@ -14,7 +14,7 @@ export const useLogin = () => {
             onSuccess: (response) => {
                 const apiResponse = response.data;
                 if (responseIsSuccess(apiResponse)) {
-                    setAuth(apiResponse.data.user.id, apiResponse.data.token);
+                    setAuth(apiResponse.data.user.id, apiResponse.data.token, apiResponse.data.user);
                 } else {
                     throw new Error(apiResponse.message);
                 }

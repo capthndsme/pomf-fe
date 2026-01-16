@@ -4,7 +4,12 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import { Blurhash } from "react-blurhash";
+import { Loader2, Volume2, VolumeX } from "lucide-react";
+import { cn } from "@/lib/utils";
 
+/**
+ * Video player with blurhash placeholder and controls
+ */
 const VideoWithBlurhash = ({
   item,
   videoUrl,
@@ -14,61 +19,126 @@ const VideoWithBlurhash = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
     if (video) {
       const handleLoadedData = () => setIsLoaded(true);
+      const handleError = () => setError(true);
+
       video.addEventListener("loadeddata", handleLoadedData);
+      video.addEventListener("error", handleError);
       video.load();
-      return () => video.removeEventListener("loadeddata", handleLoadedData);
+
+      return () => {
+        video.removeEventListener("loadeddata", handleLoadedData);
+        video.removeEventListener("error", handleError);
+      };
     }
   }, [videoUrl]);
 
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  if (error) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center bg-slate-900/50 rounded-lg p-8"
+      >
+        <p className="text-slate-400 text-sm">Failed to load video</p>
+        <a
+          href={videoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 text-blue-400 hover:underline text-sm"
+        >
+          Open directly
+        </a>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className="relative w-full h-full"
-      style={{ aspectRatio: `${item.itemWidth} / ${item.itemHeight}` }}
-    >
-      {!isLoaded && (
-        <Blurhash
-          hash={item.previewBlurHash ?? ""}
-          width="100%"
-          height="100%"
-          
-          className="absolute top-0 left-0 w-full h-full rounded-lg overflow-clip"
-        />
+    <div className="relative w-full h-full group">
+      {/* Blurhash placeholder */}
+      {!isLoaded && item.previewBlurHash && (
+        <div className="absolute inset-0 z-10">
+          <Blurhash
+            hash={item.previewBlurHash}
+            width="100%"
+            height="100%"
+            className="rounded-lg overflow-hidden"
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-white/50 animate-spin" />
+          </div>
+        </div>
       )}
+
+      {/* Loading state without blurhash */}
+      {!isLoaded && !item.previewBlurHash && (
+        <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">
+          <Loader2 className="w-8 h-8 text-white/50 animate-spin" />
+        </div>
+      )}
+
+      {/* Video element */}
       <video
         ref={videoRef}
         autoPlay
-        muted
+        muted={isMuted}
+        playsInline
         controls
-        className="w-full h-auto rounded-lg object-contain"
+        className="w-full h-full rounded-lg object-contain bg-black"
         style={{ opacity: isLoaded ? 1 : 0 }}
       >
         <source src={videoUrl} type={item.mimeType ?? "video/mp4"} />
         Your browser does not support the video tag.
       </video>
+
+      {/* Mute toggle overlay */}
+      {isLoaded && (
+        <button
+          onClick={toggleMute}
+          className="absolute bottom-4 right-4 p-2 bg-black/60 hover:bg-black/80 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-20"
+          title={isMuted ? "Unmute" : "Mute"}
+        >
+          {isMuted ? (
+            <VolumeX className="w-5 h-5 text-white" />
+          ) : (
+            <Volume2 className="w-5 h-5 text-white" />
+          )}
+        </button>
+      )}
     </div>
   );
 };
 
-const RenderPreview = ({ item }: { item: FileItem }) => {
+/**
+ * RenderPreview - Renders appropriate preview based on file type
+ * Handles missing preview data gracefully
+ */
+const RenderPreview = ({ item, className }: { item: FileItem; className?: string }) => {
   const [open, setOpen] = useState(false);
 
-  // Sort previews by quality ascending to easily find the lowest
+  // Sort previews by quality ascending to find the lowest quality
   const sortedPreviews = useMemo(
     () =>
-      item.previews
+      item.previews && Array.isArray(item.previews)
         ? [...item.previews].sort(
-            (a, b) => Number(a.quality) - Number(b.quality)
-          )
+          (a, b) => Number(a.quality) - Number(b.quality)
+        )
         : [],
     [item.previews]
   );
 
-  // Default to the lowest available resolution
+  // Default to the lowest available resolution for video
   const [selectedResolution, setSelectedResolution] = useState<string | null>(
     sortedPreviews.length > 0 ? sortedPreviews[0].quality.toString() : null
   );
@@ -76,111 +146,160 @@ const RenderPreview = ({ item }: { item: FileItem }) => {
   const handleResolutionChange = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
-    // Use null for original, and the string value for specific resolutions
     setSelectedResolution(
       event.target.value === "" ? null : event.target.value
     );
   };
 
+  // Calculate safe aspect ratio
+  const aspectRatio = useMemo(() => {
+    if (item.itemWidth && item.itemHeight && item.itemWidth > 0 && item.itemHeight > 0) {
+      return `${item.itemWidth} / ${item.itemHeight}`;
+    }
+    return "16 / 9";
+  }, [item.itemWidth, item.itemHeight]);
+
+  // Build base URL once
+  const baseUrl = item.serverShard?.domain
+    ? `https://${item.serverShard.domain}`
+    : null;
+
   // Determine the video URL based on the selected resolution
   const videoUrl = useMemo(() => {
+    if (!baseUrl || !item.fileKey) return null;
+
     if (selectedResolution) {
-      return `https://${item.serverShard?.domain}/${item.fileKey}_${selectedResolution}p.mp4`;
+      return `${baseUrl}/${item.fileKey}_${selectedResolution}p.mp4`;
     }
-    // Fallback to original if no resolution is selected
-    return `https://${item.serverShard?.domain}/${item.fileKey}`;
-  }, [item.fileKey, item.serverShard?.domain, selectedResolution]);
+    return `${baseUrl}/${item.fileKey}`;
+  }, [baseUrl, item.fileKey, selectedResolution]);
+
+  // Guard: No server shard means no preview possible
+  if (!baseUrl || !item.fileKey) {
+    return (
+      <div className={cn("p-8 text-center text-slate-400", className)}>
+        <p>Preview not available</p>
+      </div>
+    );
+  }
 
   switch (item.fileType) {
-    case "IMAGE":
-      const lowResPreview = sortedPreviews.find(p => p.mimeType.startsWith("image/"));
-      console.log("FK", item.fileKey)
-      const originalMain = `https://${item.serverShard?.domain}/${item.fileKey?.split("/")[0]}`;
+    case "IMAGE": {
+      const directUrl = `${baseUrl}/${item.fileKey}`;
 
+      // Find low-res image preview if available
+      const lowResPreview = sortedPreviews.find((p) =>
+        p.mimeType?.startsWith("image/")
+      );
+
+      // Build low-res URL
+      const fileKeyBase = item.fileKey?.split("/")[0];
       const lowResSrc = lowResPreview
-        ? `${originalMain}/${lowResPreview.previewKey}`
-        : `${originalMain}/${item.fileKey}`;
-      
-        console.log(lowResSrc)
+        ? `${baseUrl}/${fileKeyBase}/${lowResPreview.previewKey}`
+        : directUrl;
 
       return (
         <>
           <BlurhashImage
             src={lowResSrc}
-            trueSrc={`https://${item.serverShard?.domain}/${item.fileKey}`}
-            blurhash={item.previewBlurHash ?? ""}
-            className=" w-full h-auto object-contain rounded-lg"
-            alt={item.originalFileName ?? "NA"}
-            style={{ aspectRatio: `${item.itemWidth} / ${item.itemHeight}` }}
+            trueSrc={directUrl}
+            blurhash={item.previewBlurHash || ""}
+            className={cn("w-full h-auto object-contain", className)}
+            alt={item.originalFileName ?? "Image"}
+            style={{ aspectRatio }}
             onClick={() => setOpen(true)}
           />
           <Lightbox
             open={open}
             close={() => setOpen(false)}
-            slides={[
-              { src: `https://${item.serverShard?.domain}/${item.fileKey}` },
-            ]}
+            slides={[{ src: directUrl }]}
           />
         </>
       );
+    }
+
     case "VIDEO": {
+      if (!videoUrl) {
+        return (
+          <div
+            className={cn("flex items-center justify-center bg-slate-900/50 rounded-lg", className)}
+            style={{ aspectRatio }}
+          >
+            <p className="text-slate-400">Video not available</p>
+          </div>
+        );
+      }
+
+      // Filter video previews
+      const videoPreviews = sortedPreviews.filter((p) =>
+        p.mimeType?.startsWith("video/")
+      );
+
       return (
-        <div className="w-full">
+        <div className={cn("w-full", className)}>
           <VideoWithBlurhash item={item} videoUrl={videoUrl} />
-          {/* Only show resolution selector if there are previews */}
-          {sortedPreviews.length > 0 && (
-            <div className="mt-2">
-              <label htmlFor="resolution" className="mr-2">
-                Resolution:
+
+          {/* Resolution selector - only show if there are multiple options */}
+          {videoPreviews.length > 0 && (
+            <div className="flex items-center gap-3 mt-3 px-1">
+              <label
+                htmlFor="resolution"
+                className="text-sm text-slate-400"
+              >
+                Quality:
               </label>
               <select
                 id="resolution"
                 onChange={handleResolutionChange}
-                // The value is the selected resolution, or "" for the "Original" option
                 value={selectedResolution ?? ""}
-                className="bg-gray-800 text-white p-1 rounded"
+                className="bg-slate-800 text-white text-sm px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               >
                 <option value="">Original</option>
-                {sortedPreviews
-                  .filter((p) => p.mimeType.startsWith("video/"))
-                  .map((preview) => (
-                    <option
-                      key={preview.quality}
-                      value={preview.quality.toString()}
-                    >
-                      {preview.quality}p
-                    </option>
-                  ))}
+                {videoPreviews.map((preview) => (
+                  <option
+                    key={preview.quality}
+                    value={preview.quality.toString()}
+                  >
+                    {preview.quality}p
+                  </option>
+                ))}
               </select>
             </div>
           )}
         </div>
       );
     }
+
     case "AUDIO":
       return (
-        <audio
-          controls
-          className=" w-full aspect-[4/3] rounded-lg object-contain"
-        >
-          <source
-            src={`https://${item.serverShard?.domain}/${item.fileKey}`}
-            type={item.mimeType ?? "audio/ogg"}
-          />
-          Your browser does not support the audio tag.
-        </audio>
+        <div className={cn("p-4 bg-slate-900/50 rounded-lg", className)}>
+          <audio
+            controls
+            className="w-full"
+            preload="metadata"
+          >
+            <source
+              src={`${baseUrl}/${item.fileKey}`}
+              type={item.mimeType ?? "audio/mpeg"}
+            />
+            Your browser does not support the audio tag.
+          </audio>
+        </div>
       );
+
     case "DOCUMENT":
     case "PLAINTEXT":
       return (
         <iframe
-          src={`https://${item.serverShard?.domain}/${item.fileKey}`}
-          title={item.originalFileName ?? ""}
-          className="  w-full aspect-[4/3] rounded-lg object-contain"
-        ></iframe>
+          src={`${baseUrl}/${item.fileKey}`}
+          title={item.originalFileName ?? "Document"}
+          className={cn("w-full rounded-lg border border-slate-800", className)}
+          style={{ aspectRatio: "4 / 3", minHeight: "400px" }}
+        />
       );
+
     default:
-      return <p>No preview available for this file type.</p>;
+      return null;
   }
 };
 

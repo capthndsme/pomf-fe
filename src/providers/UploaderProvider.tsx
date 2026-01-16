@@ -22,6 +22,7 @@ interface UploadOptions {
    maxConcurrency?: number;
    useChunkedUpload?: boolean;
    chunkThreshold?: number;
+   folderId?: string | null;
 }
 
 type UploaderContextType = {

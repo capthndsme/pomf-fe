@@ -13,6 +13,7 @@ type UploadFileParams = {
    useChunkedUpload?: boolean;
    maxConcurrency?: number;
    chunkThreshold?: number; // Size threshold for chunked upload
+   folderId?: string | null;
 };
 
 interface ChunkUploadTask {
@@ -66,6 +67,7 @@ const uploadSingleChunk = async (
    task: ChunkUploadTask,
    server: string,
    token: string | null,
+   folderId: string | null | undefined,
    onChunkProgress: (chunkIndex: number, progress: number) => void,
    signal?: AbortSignal
 ): Promise<ChunkUploadResult> => {
@@ -87,6 +89,10 @@ const uploadSingleChunk = async (
          chunkSize: meta.chunkSize.toString(),
       });
 
+      if (folderId) {
+         queryParams.append('parentDirectoryId', folderId);
+      }
+
       const response = await axios.post<ApiBase<FileItem[] | null>>(`${server}?${queryParams.toString()}`, formData, {
          headers: {
             Authorization: `Bearer ${token}`,
@@ -103,14 +109,14 @@ const uploadSingleChunk = async (
          throw new Error(response.data.message);
       }
 
- 
+
       const isComplete = "data" in response.data && response.data.data !== null && response.data.status !== "chunk-finish";
 
       return {
          chunkIndex,
          success: true,
          isComplete,
-         data: isComplete &&  "data" in response.data && response.data.data !== null? response.data.data : undefined,
+         data: isComplete && "data" in response.data && response.data.data !== null ? response.data.data : undefined,
       };
    } catch (error) {
       if (signal?.aborted) {
@@ -122,7 +128,7 @@ const uploadSingleChunk = async (
          const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Max 10s delay
          await sleep(delay);
 
-         return uploadSingleChunk({ ...task, retryCount: retryCount + 1 }, server, token, onChunkProgress, signal);
+         return uploadSingleChunk({ ...task, retryCount: retryCount + 1 }, server, token, folderId, onChunkProgress, signal);
       }
 
       return {
@@ -174,6 +180,7 @@ class ChunkUploadManager {
       tasks: ChunkUploadTask[],
       server: string,
       token: string | null,
+      folderId: string | null | undefined,
       maxConcurrency: number
    ): Promise<FileItem[]> {
       const semaphore = new Semaphore(maxConcurrency);
@@ -182,7 +189,7 @@ class ChunkUploadManager {
       for (const task of tasks) {
          const promise = semaphore.acquire().then(async (release) => {
             try {
-               const result = await uploadSingleChunk(task, server, token, this.onChunkProgress, this.abortController.signal);
+               const result = await uploadSingleChunk(task, server, token, folderId, this.onChunkProgress, this.abortController.signal);
 
                if (result.success) {
                   this.completedChunks.add(result.chunkIndex);
@@ -278,11 +285,13 @@ const uploadFile = async ({
    file,
    server,
    token,
+   folderId,
    onUploadProgress,
 }: {
    file: File[];
    server: string;
    token: string | null;
+   folderId?: string | null;
    onUploadProgress: (progress: number) => void;
 }) => {
    const formData = new FormData();
@@ -295,6 +304,7 @@ const uploadFile = async ({
          Authorization: `Bearer ${token}`,
          "Content-Type": "multipart/form-data",
       },
+      params: folderId ? { parentDirectoryId: folderId } : undefined,
       onUploadProgress: (progressEvent) => {
          const percentCompleted = progressEvent.total ? Math.round((progressEvent.loaded * 100) / progressEvent.total) : 0;
          onUploadProgress(percentCompleted);
@@ -313,6 +323,7 @@ const uploadFileChunkedConcurrent = async ({
    file,
    server,
    token,
+   folderId,
    onUploadProgress,
    chunkSize = 5 * 1024 * 1024,
    maxConcurrency = 16,
@@ -320,6 +331,7 @@ const uploadFileChunkedConcurrent = async ({
    file: File;
    server: string;
    token: string | null;
+   folderId?: string | null;
    onUploadProgress: (progress: number) => void;
    chunkSize?: number;
    maxConcurrency?: number;
@@ -364,7 +376,7 @@ const uploadFileChunkedConcurrent = async ({
    const manager = new ChunkUploadManager(totalChunks, onUploadProgress);
 
    try {
-      return await manager.uploadChunksConcurrently(tasks, server, token, maxConcurrency);
+      return await manager.uploadChunksConcurrently(tasks, server, token, folderId, maxConcurrency);
    } catch (error) {
       manager.abort();
       throw error;
@@ -376,6 +388,7 @@ const uploadFileEnhanced = async ({
    file,
    server,
    token,
+   folderId,
    onUploadProgress,
    chunkSize = 5 * 1024 * 1024,
    useChunkedUpload = false,
@@ -385,6 +398,7 @@ const uploadFileEnhanced = async ({
    file: File[];
    server: string;
    token: string | null;
+   folderId?: string | null;
    onUploadProgress: (progress: number) => void;
    chunkSize?: number;
    useChunkedUpload?: boolean;
@@ -419,6 +433,7 @@ const uploadFileEnhanced = async ({
          file: singleFile,
          server,
          token,
+         folderId,
          onUploadProgress,
          chunkSize,
          maxConcurrency: optimalConcurrency,
@@ -429,6 +444,7 @@ const uploadFileEnhanced = async ({
          file,
          server,
          token,
+         folderId,
          onUploadProgress,
       });
    }
@@ -446,6 +462,7 @@ export const useUpload = () => {
          useChunkedUpload = false,
          maxConcurrency = 16,
          chunkThreshold = 8 * 1024 * 1024,
+         folderId,
       }: UploadFileParams) => {
          if (!currentServer) {
             throw new Error("No server selected");
@@ -455,6 +472,7 @@ export const useUpload = () => {
             file,
             server: `//${currentServer.domain}/${token ? "upload" : "anon-upload"}`,
             token,
+            folderId,
             onUploadProgress,
             chunkSize,
             useChunkedUpload,

@@ -37,7 +37,7 @@ const Landing = () => {
             <title>{BRANDING ?? "pomfd"} - upload</title>
          </Helmet>
 
-         <div className="w-full max-w-5xl mx-auto p-2 py-0">
+         <div className="w-full max-w-5xl mx-auto p-2 pt-16">
             <div className="my-4 flex flex-row-reverse">
                <div className="flex items-center gap-4">
                   <div>Server Selection</div>
