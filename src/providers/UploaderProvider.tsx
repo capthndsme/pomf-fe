@@ -15,14 +15,17 @@ interface UploadSession {
    chunkSize?: number;
    maxConcurrency?: number;
    useChunkedUpload?: boolean;
+   folderId?: string | null;
+   isPrivate?: boolean;
 }
 
-interface UploadOptions {
+export interface UploadOptions {
    chunkSize?: number;
    maxConcurrency?: number;
    useChunkedUpload?: boolean;
    chunkThreshold?: number;
    folderId?: string | null;
+   isPrivate?: boolean;
 }
 
 type UploaderContextType = {

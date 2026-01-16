@@ -1,13 +1,17 @@
 import { useDropzone } from "react-dropzone";
-import { useUploader } from "../providers/UploaderProvider";
+import { useUploader, type UploadOptions } from "../providers/UploaderProvider";
 import { useEffect } from "react";
 
-export const Uploader = () => {
-  const { uploadFile, isUploading, progress} = useUploader();
+interface UploaderProps {
+  uploadOptions?: UploadOptions;
+}
+
+export const Uploader = ({ uploadOptions }: UploaderProps) => {
+  const { uploadFile, isUploading, progress } = useUploader();
 
   const onDrop = (acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
-      uploadFile(acceptedFiles);
+      uploadFile(acceptedFiles, uploadOptions);
     }
   };
 
@@ -26,7 +30,7 @@ export const Uploader = () => {
       if (files && files.length > 0) {
         // Prevent the browser from trying to paste content into an input
         event.preventDefault();
-        uploadFile(Array.from(files));
+        uploadFile(Array.from(files), uploadOptions);
       }
     };
 
@@ -35,7 +39,7 @@ export const Uploader = () => {
     return () => {
       window.removeEventListener("paste", handlePaste);
     };
-  }, [isUploading, uploadFile]);
+  }, [isUploading, uploadFile, uploadOptions]);
 
   return (
     <div {...getRootProps()} className="uploader w-full aspect-square border-blue-900 border-2 border-dashed

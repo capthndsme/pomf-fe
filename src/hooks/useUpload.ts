@@ -14,6 +14,7 @@ type UploadFileParams = {
    maxConcurrency?: number;
    chunkThreshold?: number; // Size threshold for chunked upload
    folderId?: string | null;
+   isPrivate?: boolean;
 };
 
 interface ChunkUploadTask {
@@ -68,6 +69,7 @@ const uploadSingleChunk = async (
    server: string,
    token: string | null,
    folderId: string | null | undefined,
+   isPrivate: boolean | undefined,
    onChunkProgress: (chunkIndex: number, progress: number) => void,
    signal?: AbortSignal
 ): Promise<ChunkUploadResult> => {
@@ -91,6 +93,10 @@ const uploadSingleChunk = async (
 
       if (folderId) {
          queryParams.append('parentDirectoryId', folderId);
+      }
+
+      if (isPrivate) {
+         queryParams.append('isPrivate', 'true');
       }
 
       const response = await axios.post<ApiBase<FileItem[] | null>>(`${server}?${queryParams.toString()}`, formData, {
@@ -128,7 +134,7 @@ const uploadSingleChunk = async (
          const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Max 10s delay
          await sleep(delay);
 
-         return uploadSingleChunk({ ...task, retryCount: retryCount + 1 }, server, token, folderId, onChunkProgress, signal);
+         return uploadSingleChunk({ ...task, retryCount: retryCount + 1 }, server, token, folderId, isPrivate, onChunkProgress, signal);
       }
 
       return {
@@ -181,6 +187,7 @@ class ChunkUploadManager {
       server: string,
       token: string | null,
       folderId: string | null | undefined,
+      isPrivate: boolean | undefined,
       maxConcurrency: number
    ): Promise<FileItem[]> {
       const semaphore = new Semaphore(maxConcurrency);
@@ -189,7 +196,7 @@ class ChunkUploadManager {
       for (const task of tasks) {
          const promise = semaphore.acquire().then(async (release) => {
             try {
-               const result = await uploadSingleChunk(task, server, token, folderId, this.onChunkProgress, this.abortController.signal);
+               const result = await uploadSingleChunk(task, server, token, folderId, isPrivate, this.onChunkProgress, this.abortController.signal);
 
                if (result.success) {
                   this.completedChunks.add(result.chunkIndex);
@@ -220,8 +227,12 @@ class ChunkUploadManager {
          return completeResult.data;
       }
 
+      const queryParams = new URLSearchParams();
+      if (folderId) queryParams.append('parentDirectoryId', folderId);
+      if (isPrivate) queryParams.append('isPrivate', 'true');
+
       const finishResponse = await axios.post<ApiBase<FileItem[]>>(
-         `${server.replace(/\/(anon-)?upload$/, "/$1upload/chunked/finish")}`,
+         `${server.replace(/\/(anon-)?upload$/, "/$1upload/chunked/finish")}?${queryParams.toString()}`,
          {
             uploadId: tasks[0].meta.uploadId,
             totalChunks: this.totalChunks,
@@ -286,12 +297,14 @@ const uploadFile = async ({
    server,
    token,
    folderId,
+   isPrivate,
    onUploadProgress,
 }: {
    file: File[];
    server: string;
    token: string | null;
    folderId?: string | null;
+   isPrivate?: boolean;
    onUploadProgress: (progress: number) => void;
 }) => {
    const formData = new FormData();
@@ -299,12 +312,16 @@ const uploadFile = async ({
       formData.append("file[]", file);
    });
 
+   const params: Record<string, string> = {};
+   if (folderId) params.parentDirectoryId = folderId;
+   if (isPrivate) params.isPrivate = 'true';
+
    const response = await axios.post<ApiBase<FileItem[]>>(`${server}`, formData, {
       headers: {
          Authorization: `Bearer ${token}`,
          "Content-Type": "multipart/form-data",
       },
-      params: folderId ? { parentDirectoryId: folderId } : undefined,
+      params,
       onUploadProgress: (progressEvent) => {
          const percentCompleted = progressEvent.total ? Math.round((progressEvent.loaded * 100) / progressEvent.total) : 0;
          onUploadProgress(percentCompleted);
@@ -324,6 +341,7 @@ const uploadFileChunkedConcurrent = async ({
    server,
    token,
    folderId,
+   isPrivate,
    onUploadProgress,
    chunkSize = 5 * 1024 * 1024,
    maxConcurrency = 16,
@@ -332,6 +350,7 @@ const uploadFileChunkedConcurrent = async ({
    server: string;
    token: string | null;
    folderId?: string | null;
+   isPrivate?: boolean;
    onUploadProgress: (progress: number) => void;
    chunkSize?: number;
    maxConcurrency?: number;
@@ -376,7 +395,7 @@ const uploadFileChunkedConcurrent = async ({
    const manager = new ChunkUploadManager(totalChunks, onUploadProgress);
 
    try {
-      return await manager.uploadChunksConcurrently(tasks, server, token, folderId, maxConcurrency);
+      return await manager.uploadChunksConcurrently(tasks, server, token, folderId, isPrivate, maxConcurrency);
    } catch (error) {
       manager.abort();
       throw error;
@@ -389,6 +408,7 @@ const uploadFileEnhanced = async ({
    server,
    token,
    folderId,
+   isPrivate,
    onUploadProgress,
    chunkSize = 5 * 1024 * 1024,
    useChunkedUpload = false,
@@ -399,6 +419,7 @@ const uploadFileEnhanced = async ({
    server: string;
    token: string | null;
    folderId?: string | null;
+   isPrivate?: boolean;
    onUploadProgress: (progress: number) => void;
    chunkSize?: number;
    useChunkedUpload?: boolean;
@@ -434,6 +455,7 @@ const uploadFileEnhanced = async ({
          server,
          token,
          folderId,
+         isPrivate,
          onUploadProgress,
          chunkSize,
          maxConcurrency: optimalConcurrency,
@@ -445,6 +467,7 @@ const uploadFileEnhanced = async ({
          server,
          token,
          folderId,
+         isPrivate,
          onUploadProgress,
       });
    }
@@ -463,6 +486,7 @@ export const useUpload = () => {
          maxConcurrency = 16,
          chunkThreshold = 8 * 1024 * 1024,
          folderId,
+         isPrivate,
       }: UploadFileParams) => {
          if (!currentServer) {
             throw new Error("No server selected");
@@ -473,6 +497,7 @@ export const useUpload = () => {
             server: `//${currentServer.domain}/${token ? "upload" : "anon-upload"}`,
             token,
             folderId,
+            isPrivate,
             onUploadProgress,
             chunkSize,
             useChunkedUpload,

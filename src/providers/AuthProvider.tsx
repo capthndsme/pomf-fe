@@ -41,11 +41,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     } else {
                         // Token invalid, clear auth
                         clearAuthState();
+                        localStorage.removeItem('save_to_root');
                         setAuthInternal({ userId: null, token: null, user: null });
                     }
                 } catch {
                     // Token verification failed, clear auth
                     clearAuthState();
+                    localStorage.removeItem('save_to_root');
                     setAuthInternal({ userId: null, token: null, user: null });
                 }
             }
@@ -60,6 +62,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const clearAuth = useCallback(() => {
         clearAuthState();
+        localStorage.removeItem('save_to_root');
         setAuthInternal({ userId: null, token: null, user: null });
     }, []);
 

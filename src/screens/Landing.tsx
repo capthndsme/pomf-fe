@@ -1,4 +1,5 @@
 import { useCurrentServer } from "@/providers/CurrentServerProvider";
+import { useAuth } from "@/providers/AuthProvider";
 import { useUploader } from "../providers/UploaderProvider";
 import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
@@ -9,6 +10,21 @@ import { BRANDING } from "@/constants";
 
 const Landing = () => {
    const serversApi = useCurrentServer();
+   const { isAuthenticated } = useAuth();
+
+   const [saveToRoot, setSaveToRoot] = useState<boolean>(() => {
+      return localStorage.getItem('save_to_root') === 'true';
+   });
+
+   const toggleSaveToRoot = () => {
+      const newValue = !saveToRoot;
+      setSaveToRoot(newValue);
+      if (newValue) {
+         localStorage.setItem('save_to_root', 'true');
+      } else {
+         localStorage.removeItem('save_to_root');
+      }
+   };
 
    const [serverLatency, setServerLatency] = useState<number>(0);
    useEffect(() => {
@@ -67,7 +83,22 @@ const Landing = () => {
                <div className="w-full md:w-1/3 bg-blue-950 rounded-lg p-4 text-white">
                   <h2 className="text-2xl mb-4 font-light">Anonymous Uploader</h2>
 
-                  <Uploader />
+                  {isAuthenticated && (
+                     <div className="flex items-center gap-2 mb-4">
+                        <input
+                           type="checkbox"
+                           id="saveToRoot"
+                           checked={saveToRoot}
+                           onChange={toggleSaveToRoot}
+                           className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label htmlFor="saveToRoot" className="text-sm font-medium text-gray-200 select-none cursor-pointer">
+                           Save to Root (Private)
+                        </label>
+                     </div>
+                  )}
+
+                  <Uploader uploadOptions={{ isPrivate: saveToRoot && isAuthenticated }} />
                </div>
 
                {/* Right Column */}
