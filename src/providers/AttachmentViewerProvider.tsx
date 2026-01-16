@@ -8,6 +8,7 @@ import { TouchableLink } from "@/components/TouchableLink";
 import type FileItem from "../../types/response/FileItem";
 import { useFileViewUrls } from "@/hooks/useFileViewUrls";
 import { toSharedFileUrl } from "@/lib/shareLinks";
+import ShareFileModal from "@/components/ShareFileModal";
 
 interface AttachmentViewerContextType {
   previewFile: (file: FileItem) => void;
@@ -27,6 +28,7 @@ export const useAttachmentViewer = () => {
 export const AttachmentViewerProvider = ({ children }: { children: ReactNode }) => {
   const [previewItem, setPreviewItem] = useState<FileItem | null>(null);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [showShareFileModal, setShowShareFileModal] = useState(false);
 
   const previewFile = async (file: FileItem) => {
     // Sanitize file object to handle leaky booleans (0/1 to false/true)
@@ -59,15 +61,20 @@ export const AttachmentViewerProvider = ({ children }: { children: ReactNode }) 
     const aspectRatio = hasValidDimensions ? (previewItem.itemWidth as number) / (previewItem.itemHeight as number) : 16 / 9;
     const isPortrait = aspectRatio < 1;
 
-    // For private files, the share URL is different or non-existent unless explicitly shared
-    // But for the viewer, we can show the standard link structure, which will handle auth or 404
-    const shareUrl = previewItem.id ? toSharedFileUrl(previewItem.id) : window.location.href;
+    // Only show a share URL for public files. Private files require an explicit share link generation.
+    const shareUrl = !previewItem.isPrivate && previewItem.id ? toSharedFileUrl(previewItem.id) : null;
 
     return { directUrl, canPreview, isTranscoding, isPortrait, shareUrl };
   }, [previewItem, viewUrls?.originalUrl]);
 
   const handleShare = async () => {
     if (!previewItem || !previewItem.id) return;
+
+    // For private files, generate a real share link (temporary for private)
+    if (previewItem.isPrivate) {
+      setShowShareFileModal(true);
+      return;
+    }
     
     const shareUrl = toSharedFileUrl(previewItem.id);
     
@@ -235,6 +242,13 @@ export const AttachmentViewerProvider = ({ children }: { children: ReactNode }) 
                   onShare={handleShare}
                />
             </div>
+
+            {showShareFileModal && previewItem?.id && (
+              <ShareFileModal
+                file={{ id: previewItem.id, name: previewItem.name, isPrivate: !!previewItem.isPrivate }}
+                onClose={() => setShowShareFileModal(false)}
+              />
+            )}
          </div>
       )}
     </AttachmentViewerContext.Provider>

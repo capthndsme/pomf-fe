@@ -1,7 +1,7 @@
 import RenderPreview from "@/components/RenderPreview";
 import { TouchableLink } from "@/components/TouchableLink";
 import { BRANDING } from "@/constants";
-import { useResolveLinkToFile } from "@/hooks/useResolveLinkToFile";
+import { ApiResponseError, useResolveLinkToFile } from "@/hooks/useResolveLinkToFile";
 import { cn } from "@/lib/utils";
 import {
    Download,
@@ -95,9 +95,20 @@ const ShareLink = () => {
 
    if (isError || !file) {
       // /s/:id is a share surface: it can be a file alias OR a folder shareId.
-      // If file resolution fails, fall back to shared-folder rendering.
-      if (id) {
-         return <SharedFolder shareIdOverride={id} />;
+      // If file resolution fails, fall back to shared-folder rendering ONLY when it
+      // doesn't look like "private file requires login".
+      const err = error as unknown;
+      const isPrivateLoginRequired =
+         err instanceof ApiResponseError &&
+         err.status === 'not-found' &&
+         /file is private|login required/i.test(err.message);
+
+      if (id && !isPrivateLoginRequired) {
+        return <SharedFolder shareIdOverride={id} />;
+      }
+
+      if (isPrivateLoginRequired) {
+        return <ShareLinkError message="This file is private. Please log in to view it." />;
       }
       return <ShareLinkError message={(error as Error)?.message} />;
    }
@@ -183,6 +194,7 @@ const ShareLink = () => {
                <InfoPanel
                   file={file}
                   directUrl={directUrl}
+                  shareUrl={window.location.href}
                   isOpen={true}
                   onClose={() => { }}
                   onShare={handleShare}
@@ -230,6 +242,7 @@ const ShareLink = () => {
                <InfoPanel
                   file={file}
                   directUrl={directUrl}
+                  shareUrl={window.location.href}
                   isOpen={showInfoPanel}
                   onClose={() => setShowInfoPanel(false)}
                   onShare={handleShare}

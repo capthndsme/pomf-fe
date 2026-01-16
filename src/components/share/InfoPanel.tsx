@@ -31,13 +31,13 @@ export const InfoPanel = ({
 }: {
     file: FileItem;
     directUrl: string | null;
-    shareUrl?: string;
+    shareUrl?: string | null;
     isOpen: boolean;
     onClose: () => void;
     onShare?: () => void;
 }) => {
     const canPreview = file.fileType === 'IMAGE' || file.fileType === 'VIDEO' || file.fileType === 'AUDIO';
-    const displayShareUrl = shareUrl || window.location.href;
+    const hasShareUrl = !!shareUrl;
 
     return (
         <div className={cn(
@@ -81,12 +81,18 @@ export const InfoPanel = ({
                     {/* Share Link */}
                     <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-800/50">
                         <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Share Link</p>
-                        <div className="flex items-center gap-1">
-                            <code className="flex-1 text-xs text-blue-400 font-mono break-all line-clamp-2">
-                                {displayShareUrl}
-                            </code>
-                            <CopyButton text={displayShareUrl} size="sm" />
-                        </div>
+                        {hasShareUrl ? (
+                            <div className="flex items-center gap-1">
+                                <code className="flex-1 text-xs text-blue-400 font-mono break-all line-clamp-2">
+                                    {shareUrl}
+                                </code>
+                                <CopyButton text={shareUrl} size="sm" />
+                            </div>
+                        ) : (
+                            <p className="text-xs text-slate-400">
+                                {file.isPrivate ? "Private file: generate a share link to share it." : "No share link available."}
+                            </p>
+                        )}
                     </div>
 
                     {/* Direct Link */}
@@ -148,7 +154,7 @@ export const InfoPanel = ({
                                 className="flex items-center justify-center gap-2 w-full h-11 bg-slate-800/50 hover:bg-slate-800 text-slate-200 font-semibold rounded-xl transition-all border border-slate-700/50"
                             >
                                 <Share2 className="w-4 h-4" />
-                                Share Link
+                                {hasShareUrl ? "Share Link" : "Generate Share Link"}
                             </button>
                         )}
                         {directUrl && (
