@@ -3,6 +3,7 @@ import type FileItem from "../../types/response/FileItem";
 import { axiosInstanceAuth } from "@/api/axios";
 import type { FileViewUrls } from "@/lib/fileViewUrls";
 import { buildPublicViewUrls } from "@/lib/fileViewUrls";
+import { useAvailableServers } from "@/hooks/useAvailableServers";
 
 type ViewUrlsState = {
   urls: FileViewUrls | null;
@@ -23,11 +24,13 @@ type ViewUrlsResponse = {
 };
 
 export const useFileViewUrls = (item: FileItem | null): ViewUrlsState => {
+  const { data: availableServers, isLoading: isServersLoading } = useAvailableServers();
+
   const publicUrls = useMemo(() => {
     if (!item) return null;
     if (!!item.isPrivate) return null;
-    return buildPublicViewUrls(item);
-  }, [item]);
+    return buildPublicViewUrls(item, availableServers);
+  }, [item, availableServers]);
 
   const [state, setState] = useState<ViewUrlsState>({
     urls: publicUrls,
@@ -42,9 +45,18 @@ export const useFileViewUrls = (item: FileItem | null): ViewUrlsState => {
       return;
     }
     if (!item.isPrivate) {
-      setState({ urls: publicUrls, isLoading: false, error: null });
+      // Public files may still require shard-domain resolution if the API omitted serverShard.
+      // While servers are loading, show a loading state rather than a blank preview.
+      const needsDomainResolution = !publicUrls && !!item.serverShardId && !item.serverShard?.domain;
+      if (needsDomainResolution && isServersLoading) {
+        setState({ urls: null, isLoading: true, error: null });
+      } else if (needsDomainResolution && !publicUrls) {
+        setState({ urls: null, isLoading: false, error: "Missing file host for preview" });
+      } else {
+        setState({ urls: publicUrls, isLoading: false, error: null });
+      }
     }
-  }, [item, publicUrls]);
+  }, [item, publicUrls, isServersLoading]);
 
   useEffect(() => {
     if (!item?.id) return;

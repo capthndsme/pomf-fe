@@ -1,4 +1,5 @@
 import type FileItem from "../../types/response/FileItem";
+import type ServerShard from "../../types/response/ServerShard";
 
 export type FileViewPreviewUrl = {
   id: string;
@@ -28,23 +29,49 @@ export const buildPublicUrl = (domain: string | null | undefined, filePath: stri
   if (!domain || !filePath) return null;
   // Some API responses may already include a fully qualified URL (e.g. presigned/private shares).
   if (isAlreadyUrl(filePath)) return filePath;
-  return `${normalizeOrigin(domain)}/${filePath}`;
+  const cleanPath = filePath.replace(/^\/+/, "");
+  return `${normalizeOrigin(domain)}/${cleanPath}`;
 };
 
-export const buildPublicViewUrls = (item: FileItem): FileViewUrls | null => {
-  if (!item?.id) return null;
-  if (!item.serverShard?.domain) return null;
+export const resolveShardDomain = (item: FileItem, availableServers?: ServerShard[] | null): string | null => {
+  if (item?.serverShard?.domain) return item.serverShard.domain;
+  const shardId = item?.serverShardId;
+  if (!shardId || !Array.isArray(availableServers)) return null;
+  return availableServers.find((s) => s.id === shardId)?.domain ?? null;
+};
 
-  const originalUrl = buildPublicUrl(item.serverShard.domain, item.fileKey);
-  const thumbnailUrl = buildPublicUrl(item.serverShard.domain, item.previewKey);
+const joinRelativeToFileKey = (fileKey: string | null | undefined, maybeRelativeKey: string | null | undefined) => {
+  if (!maybeRelativeKey) return null;
+  if (!fileKey) return maybeRelativeKey;
+  // If the preview key already includes a path, keep as-is.
+  if (maybeRelativeKey.includes("/")) return maybeRelativeKey;
+  const idx = fileKey.lastIndexOf("/");
+  if (idx === -1) return maybeRelativeKey;
+  const prefix = fileKey.slice(0, idx);
+  return `${prefix}/${maybeRelativeKey}`;
+};
+
+export const buildPublicViewUrls = (item: FileItem, availableServers?: ServerShard[] | null): FileViewUrls | null => {
+  if (!item?.id) return null;
+  const domain = resolveShardDomain(item, availableServers);
+  if (!domain) return null;
+
+  const originalUrl = buildPublicUrl(domain, item.fileKey);
+  const thumbnailUrl = buildPublicUrl(domain, joinRelativeToFileKey(item.fileKey, item.previewKey));
 
   const previews = Array.isArray(item.previews)
-    ? item.previews.map((p) => ({
-        id: p.id,
-        quality: p.quality.toString(),
-        mimeType: p.mimeType,
-        url: buildPublicUrl(item.serverShard!.domain, p.previewKey) ?? "",
-      }))
+    ? item.previews
+        .map((p) => {
+          const url = buildPublicUrl(domain, joinRelativeToFileKey(item.fileKey, p.previewKey));
+          if (!url) return null;
+          return {
+            id: p.id,
+            quality: p.quality.toString(),
+            mimeType: p.mimeType,
+            url,
+          };
+        })
+        .filter((p): p is FileViewPreviewUrl => !!p)
     : [];
 
   return {

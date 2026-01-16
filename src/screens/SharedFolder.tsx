@@ -17,9 +17,8 @@ import {
     Clock,
     User
 } from "lucide-react";
-import Lightbox from "yet-another-react-lightbox";
-import "yet-another-react-lightbox/styles.css";
 import { buildPublicUrl } from "@/lib/fileViewUrls";
+import ImageLightbox from "@/components/lightbox/ImageLightbox";
 
 interface FileItem {
     id: string;
@@ -163,9 +162,11 @@ const SharedFolder = ({ shareIdOverride }: { shareIdOverride?: string }) => {
         !f.isFolder && (f.mimeType?.startsWith('image/') || f.fileType === 'IMAGE')
     ) || [];
 
-        const lightboxSlides = imageFiles.map(file => ({
+    const lightboxSlides = imageFiles.map(file => ({
         src: buildPublicUrl(file.serverShard?.domain, file.fileKey) ?? '',
         title: file.name,
+        alt: file.name,
+        downloadUrl: buildPublicUrl(file.serverShard?.domain, file.fileKey) ?? undefined,
     }));
 
     const openLightbox = (file: FileItem) => {
@@ -370,10 +371,11 @@ const SharedFolder = ({ shareIdOverride }: { shareIdOverride?: string }) => {
             </div>
 
             {/* Lightbox */}
-            <Lightbox
+            <ImageLightbox
                 open={lightboxOpen}
-                close={() => setLightboxOpen(false)}
+                onClose={() => setLightboxOpen(false)}
                 index={lightboxIndex}
+                onIndexChange={setLightboxIndex}
                 slides={lightboxSlides}
             />
         </>

@@ -32,37 +32,49 @@ const BlurhashImage = ({
     style,
     ...props
 }: BlurhashImageProps) => {
+    const [displaySrc, setDisplaySrc] = useState(src);
     const [loaded, setLoaded] = useState(false);
     const [error, setError] = useState(false);
 
     const hasValidBlurhash = useMemo(() => isValidBlurhash(blurhash), [blurhash]);
 
     useEffect(() => {
-        // Reset states when src changes
+        // Progressive load: show `src` quickly, then swap to `trueSrc` once it loads.
+        let cancelled = false;
+        setDisplaySrc(src);
         setLoaded(false);
         setError(false);
 
-        const img = new Image();
-        img.src = src;
+        const low = new Image();
+        low.src = src;
 
-        img.onload = () => {
+        low.onload = () => {
+            if (cancelled) return;
             setLoaded(true);
         };
 
-        img.onerror = () => {
+        low.onerror = () => {
+            if (cancelled) return;
             setError(true);
-            // Try loading the trueSrc as fallback
+            // If low-res fails, try the high-res directly.
             if (trueSrc && trueSrc !== src) {
-                const fallback = new Image();
-                fallback.src = trueSrc;
-                fallback.onload = () => setLoaded(true);
+                setDisplaySrc(trueSrc);
             }
         };
 
-        // Cleanup
+        // Kick off hi-res load in background (don’t block low-res render).
+        if (trueSrc && trueSrc !== src) {
+            const hi = new Image();
+            hi.src = trueSrc;
+            hi.onload = () => {
+                if (cancelled) return;
+                setDisplaySrc(trueSrc);
+                setLoaded(true);
+            };
+        }
+
         return () => {
-            img.onload = null;
-            img.onerror = null;
+            cancelled = true;
         };
     }, [src, trueSrc]);
 
@@ -103,7 +115,7 @@ const BlurhashImage = ({
                 {/* Actual image */}
                 <img
                     {...props}
-                    src={error && trueSrc ? trueSrc : src}
+                    src={displaySrc}
                     alt={alt}
                     loading="lazy"
                     className={cn(

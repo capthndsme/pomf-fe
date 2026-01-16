@@ -1,9 +1,6 @@
 import type FileItem from "../../types/response/FileItem";
 import BlurhashImage from "./BlurhashImage";
 import { useState, useRef, useEffect, useMemo } from "react";
-import Lightbox from "yet-another-react-lightbox";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import "yet-another-react-lightbox/styles.css";
 import { Blurhash } from "react-blurhash";
 import { Loader2, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -135,7 +132,16 @@ const RenderPreview = ({
   urls: FileViewUrls;
   className?: string;
 }) => {
-  const [open, setOpen] = useState(false);
+  // Inline zoom/pan for images (avoids “lightbox inside a fullscreen viewer”)
+  const [imageScale, setImageScale] = useState(1);
+  const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
+  const imageDragRef = useRef<{
+    startX: number;
+    startY: number;
+    startOffsetX: number;
+    startOffsetY: number;
+    pointerId: number;
+  } | null>(null);
 
   const allPreviews = useMemo(() => (Array.isArray(urls?.previews) ? urls.previews : []), [urls?.previews]);
 
@@ -195,24 +201,84 @@ const RenderPreview = ({
       const directUrl = originalUrl;
       const lowResSrc = sortedImagePreviews.length > 0 ? sortedImagePreviews[0].url : directUrl;
 
+      const resetZoom = () => {
+        setImageScale(1);
+        setImageOffset({ x: 0, y: 0 });
+        imageDragRef.current = null;
+      };
+
+      useEffect(() => {
+        resetZoom();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [item?.id, directUrl]);
+
+      const onWheel: React.WheelEventHandler<HTMLDivElement> = (e) => {
+        e.preventDefault();
+        const direction = e.deltaY > 0 ? -1 : 1;
+        const factor = direction > 0 ? 1.1 : 1 / 1.1;
+        setImageScale((s) => Math.min(6, Math.max(1, s * factor)));
+      };
+
+      const onPointerDown: React.PointerEventHandler<HTMLDivElement> = (e) => {
+        if (imageScale <= 1) return;
+        (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+        imageDragRef.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          startOffsetX: imageOffset.x,
+          startOffsetY: imageOffset.y,
+          pointerId: e.pointerId,
+        };
+      };
+
+      const onPointerMove: React.PointerEventHandler<HTMLDivElement> = (e) => {
+        if (!imageDragRef.current) return;
+        if (imageDragRef.current.pointerId !== e.pointerId) return;
+        const dx = e.clientX - imageDragRef.current.startX;
+        const dy = e.clientY - imageDragRef.current.startY;
+        const max = (imageScale - 1) * 220;
+        setImageOffset({
+          x: Math.min(max, Math.max(-max, imageDragRef.current.startOffsetX + dx)),
+          y: Math.min(max, Math.max(-max, imageDragRef.current.startOffsetY + dy)),
+        });
+      };
+
+      const onPointerUp: React.PointerEventHandler<HTMLDivElement> = (e) => {
+        if (!imageDragRef.current) return;
+        if (imageDragRef.current.pointerId !== e.pointerId) return;
+        imageDragRef.current = null;
+      };
+
+      const onDoubleClick: React.MouseEventHandler<HTMLDivElement> = (e) => {
+        e.preventDefault();
+        setImageScale((s) => (s === 1 ? 2 : 1));
+        setImageOffset({ x: 0, y: 0 });
+      };
+
       return (
-        <>
+        <div
+          className={cn("w-full h-auto", className)}
+          onWheel={onWheel}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onDoubleClick={onDoubleClick}
+        >
           <BlurhashImage
             src={lowResSrc}
             trueSrc={directUrl}
             blurhash={item.previewBlurHash || ""}
             className={cn("w-full h-auto object-contain", className)}
             alt={item.originalFileName ?? "Image"}
-            style={{ aspectRatio }}
-            onClick={() => setOpen(true)}
+            style={{
+              aspectRatio,
+              transform: `translate3d(${imageOffset.x}px, ${imageOffset.y}px, 0) scale(${imageScale})`,
+              transition: imageDragRef.current ? "none" : "transform 120ms ease-out",
+              willChange: "transform",
+            }}
           />
-          <Lightbox
-            open={open}
-            close={() => setOpen(false)}
-            slides={[{ src: directUrl }]}
-            plugins={[Zoom]}
-          />
-        </>
+        </div>
       );
     }
 
