@@ -9,7 +9,8 @@ export const TouchableLink = ({
    hitSlop,
    target,
    download,
-   onClick
+   onClick,
+   title
 }: {
    to?: string | number;
    children: React.ReactNode;
@@ -18,12 +19,14 @@ export const TouchableLink = ({
    target?: ComponentProps<"a">["target"];
    download?: ComponentProps<"a">["download"];
    onClick?: () => void;
+   title?: ComponentProps<"a">["title"];
 }) => {
    const navigate = useNavigate();
    return (
       <TouchableOpacity
          className={className}
          hitSlop={hitSlop}
+         title={title}
          onPress={() => {
             onClick?.();
             if (download) {

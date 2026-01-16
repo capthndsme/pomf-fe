@@ -2,7 +2,7 @@ import { type FC } from "react";
 import { TouchableLink } from "./TouchableLink";
 import { BRANDING } from "@/constants";
 import { useAuth } from "@/providers/AuthProvider";
-import { User, LogOut, FolderOpen, ChevronDown } from "lucide-react";
+import { User, LogOut, FolderOpen, ChevronDown, Link2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 const Topbar: FC = () => {
@@ -77,6 +77,15 @@ const Topbar: FC = () => {
                         >
                            <FolderOpen size={18} className="text-blue-400" />
                            <span>My Files</span>
+                        </TouchableLink>
+
+                        <TouchableLink
+                           to="/my-shares"
+                           className="flex items-center gap-3 px-4 py-3 hover:bg-white/10 transition-colors"
+                           onClick={() => setIsDropdownOpen(false)}
+                        >
+                           <Link2 size={18} className="text-purple-300" />
+                           <span>My Shares</span>
                         </TouchableLink>
 
                         <button

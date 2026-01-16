@@ -16,6 +16,7 @@ interface TouchableOpacityProps {
    children: ReactNode;
    /** Handler to be called when the user taps the component. */
    onPress?: () => void;
+   title?: string;
    /** Handler to be called when the user holds the component for a specified duration. */
    onLongPress?: () => void;
    /** Custom styles to be applied to the wrapping div element. */
@@ -41,6 +42,7 @@ interface TouchableOpacityProps {
 const TouchableOpacity: React.FC<TouchableOpacityProps> = ({
    children,
    onPress,
+   title,
    onLongPress,
    style = {},
    activeOpacity = 0.2,
@@ -327,6 +329,7 @@ const TouchableOpacity: React.FC<TouchableOpacityProps> = ({
          ref={elementRef}
          style={componentStyle}
          className={className}
+         title={title}
          onMouseDown={handleMouseDown}
          onMouseUp={handleMouseUp}
          onMouseLeave={handleMouseLeave}

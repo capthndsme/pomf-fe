@@ -18,7 +18,7 @@ const expirationOptions: { value: ExpirationOption; label: string; seconds: numb
     { value: '24h', label: '24 Hours', seconds: 86400 },
     { value: '7d', label: '7 Days', seconds: 604800 },
     { value: '30d', label: '30 Days', seconds: 2592000 },
-    { value: 'never', label: 'Never (Public only)', seconds: null },
+    { value: 'never', label: 'Never', seconds: null },
 ];
 
 const ShareFileModal = ({ file, onClose }: ShareFileModalProps) => {
@@ -47,12 +47,12 @@ const ShareFileModal = ({ file, onClose }: ShareFileModalProps) => {
             });
 
             if (response.data?.status === 'success') {
-                const { url, shareUrl, directUrl, expiresIn: returnedExpiresIn } = response.data.data;
+                const { url, shareUrl, directUrl, directExpiresIn } = response.data.data;
                 setShareUrl(shareUrl || url);
                 setDirectUrl(directUrl || null);
 
-                if (returnedExpiresIn) {
-                    setExpiresAt(new Date(Date.now() + returnedExpiresIn * 1000));
+                if (directExpiresIn) {
+                    setExpiresAt(new Date(Date.now() + directExpiresIn * 1000));
                 }
             } else {
                 throw new Error(response.data?.message || 'Failed to create share link');
@@ -213,7 +213,7 @@ const ShareFileModal = ({ file, onClose }: ShareFileModalProps) => {
                         {file.isPrivate && (
                             <div className="mb-4 p-3 rounded-lg bg-yellow-500/20 border border-yellow-500/30 text-yellow-200 text-sm flex items-center gap-2">
                                 <Clock size={16} />
-                                <span>Private files: Share Link is a stable /s link; Direct Link expires</span>
+                                <span>Share Link uses the /s share surface. Direct Link is an expiring URL.</span>
                             </div>
                         )}
 
@@ -224,20 +224,14 @@ const ShareFileModal = ({ file, onClose }: ShareFileModalProps) => {
                             </label>
                             <div className="grid grid-cols-2 gap-2">
                                 {expirationOptions.map((option) => {
-                                    // Disable "never" for private files
-                                    const isDisabled = !!file.isPrivate && option.value === 'never';
-
                                     return (
                                         <button
                                             key={option.value}
                                             type="button"
-                                            onClick={() => !isDisabled && setExpiration(option.value)}
-                                            disabled={isDisabled}
+                                            onClick={() => setExpiration(option.value)}
                                             className={`p-3 rounded-lg border transition-all ${expiration === option.value
                                                 ? 'bg-blue-600/30 border-blue-500'
-                                                : isDisabled
-                                                    ? 'bg-white/5 border-white/5 opacity-50 cursor-not-allowed'
-                                                    : 'bg-white/5 border-white/10 hover:bg-white/10'
+                                                : 'bg-white/5 border-white/10 hover:bg-white/10'
                                                 }`}
                                         >
                                             <p className="font-medium text-white text-sm">{option.label}</p>

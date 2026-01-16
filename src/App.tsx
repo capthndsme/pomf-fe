@@ -12,6 +12,7 @@ const StatusPage = lazy(() => import("@/screens/StatusPage"));
 const Login = lazy(() => import("@/screens/Login"));
 const Register = lazy(() => import("@/screens/Register"));
 const MyFiles = lazy(() => import("@/screens/MyFiles"));
+const MyShares = lazy(() => import("@/screens/MyShares"));
 
 const FolderShareRedirect = () => {
   const { shareId } = useParams<{ shareId: string }>();
@@ -63,6 +64,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <MyFiles />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-shares"
+            element={
+              <ProtectedRoute>
+                <MyShares />
               </ProtectedRoute>
             }
           />

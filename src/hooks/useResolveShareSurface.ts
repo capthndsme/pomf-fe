@@ -14,13 +14,28 @@ type FileShareResponse = ApiBase<{
   viewUrls: FileViewUrls;
 }>;
 
+async function getApiResponse<T>(promise: Promise<{ data: ApiBase<T> }>): Promise<ApiBase<T>> {
+  try {
+    const res = await promise;
+    return res.data;
+  } catch (e: any) {
+    // Axios throws on non-2xx; the API still returns structured ApiBase JSON.
+    const data = e?.response?.data;
+    if (data && typeof data === "object") {
+      return data as ApiBase<T>;
+    }
+    throw e;
+  }
+}
+
 export function useResolveShareSurface(id: string) {
   return useQuery<ShareSurfaceResult, ApiResponseError>(
     ["share-surface", id],
     async () => {
       // 1) Try normal public file alias resolution
-      const res = await axiosInstanceAuthOptional.get<ApiBase<FileItem>>(`/file/${id}`);
-      const api = res.data;
+      const api = await getApiResponse<FileItem>(
+        axiosInstanceAuthOptional.get<ApiBase<FileItem>>(`/file/${id}`)
+      );
       if (responseIsSuccess(api)) {
         return { kind: "public-file", file: api.data };
       }
@@ -30,9 +45,10 @@ export function useResolveShareSurface(id: string) {
         throw new ApiResponseError(api.status, api.message);
       }
 
-      // 2) Try token-based private file share resolution
-      const shareRes = await axiosInstanceAuthOptional.get<FileShareResponse>(`/file/share-file/${id}`);
-      const shareApi = shareRes.data;
+      // 2) Try file share resolution (DB-backed share IDs or legacy tokens)
+      const shareApi = await getApiResponse<{ file: FileItem; viewUrls: FileViewUrls }>(
+        axiosInstanceAuthOptional.get<FileShareResponse>(`/file/share-file/${id}`)
+      );
       if (responseIsSuccess(shareApi)) {
         return { kind: "file-share", file: shareApi.data.file, viewUrls: shareApi.data.viewUrls };
       }
