@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, type ReactNode, type CSSProperties } from "react";
+import React, { useState, useRef, useEffect, type ReactNode, type CSSProperties, useCallback } from "react";
 
 interface HitSlop {
    /** Extra hit area on the top */
@@ -73,21 +73,21 @@ const TouchableOpacity: React.FC<TouchableOpacityProps> = ({
    // Track if we're currently inside the touchable area
    const isInsideTouchable = useRef<boolean>(false);
 
-   useEffect(() => {
-      return () => {
-         clearAllTimers();
-      };
-   }, []);
 
-   const clearAllTimers = () => {
+
+   const clearAllTimers = useCallback(() => {
       if (timers.pressIn) clearTimeout(timers.pressIn);
       if (timers.pressOut) clearTimeout(timers.pressOut);
       if (timers.longPress) clearTimeout(timers.longPress);
       timers.pressIn = null;
       timers.pressOut = null;
       timers.longPress = null;
-   };
-
+   }, [timers]);
+   useEffect(() => {
+      return () => {
+         clearAllTimers();
+      };
+   }, [clearAllTimers]);
    const cancelPress = () => {
       clearAllTimers();
       setIsActive(false);

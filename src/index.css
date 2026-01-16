@@ -136,3 +136,10 @@
   }
 }
  
+/**
+Make every scroll bar SMALL
+*/
+
+* {
+  scrollbar-width: thin;
+}

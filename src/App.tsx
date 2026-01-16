@@ -6,6 +6,7 @@ import FullsizeSpinner from "@/components/FullsizeSpinner";
 const Landing = lazy(() => import("@/screens/Landing"));
 const Protected = lazy(() => import("@/screens/Protected"));
 const ShareLink = lazy(() => import("@/screens/ShareLink"));
+const StatusPage = lazy(() => import("@/screens/StatusPage"))
 
 // a mock auth check
 const isAuthenticated = true;
@@ -18,6 +19,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/s/:id" element={<ShareLink />} />
+          <Route path="/status" element={<StatusPage />} />
           {isAuthenticated ? (
             <Route path="/protected" element={<Protected />} />
           ) : null}

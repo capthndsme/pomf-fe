@@ -10,7 +10,10 @@ export const useAvailableServers = () => {
          const response = await axiosInstance.get<ApiBase<ServerShard[]>>("/upload/available-servers");
          const apiResponse = response.data;
          if (responseIsSuccess(apiResponse)) {
-            return apiResponse.data;
+            return apiResponse.data.sort(
+               // sort size
+               (a,b) => b.spaceFree - a.spaceFree
+            );
          } else {
             throw new Error(apiResponse.message);
          }

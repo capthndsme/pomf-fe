@@ -96,15 +96,20 @@ const Landing = () => {
             </div>
             <div className=" mt-4 text-sm text-center font-light opacity-70">
                <div className="">pomfd by @capthndsme (c) 2025</div>
+               <TouchableLink to="/status" className="inline-block p-2  text-blue-400">Status</TouchableLink>
+               <div className="pt-2">microservices:</div>
                <div className="items-center justify-center flex-row flex">
-                  <TouchableLink to="https://github.com/capthndsme/pomfd-api" target="_blank" className="inline-block p-2  text-blue-400">
-                     pomfd-api
+                  <TouchableLink to="https://github.com/capthndsme/pomfd-api" target="_blank" className="inline-block p-2 pt-0  text-blue-400">
+                     api
                   </TouchableLink>
-                  <TouchableLink to="https://github.com/capthndsme/pomfd-api" target="_blank" className="inline-block p-2  text-blue-400">
-                     pomfd-serve
+                  <TouchableLink to="https://github.com/capthndsme/pomfd-serve" target="_blank" className="inline-block p-2 pt-0 text-blue-400">
+                     serve
                   </TouchableLink>
-                  <TouchableLink to="https://github.com/capthndsme/pomfd-fe" target="_blank" className="inline-block p-2  text-blue-400">
-                     pomfd-fe 
+                  <TouchableLink to="https://github.com/capthndsme/pomfd-serve" target="_blank" className="inline-block p-2 pt-0 text-blue-400">
+                     transcoder
+                  </TouchableLink>
+                  <TouchableLink to="https://github.com/capthndsme/pomfd-fe" target="_blank" className="inline-block p-2 pt-0  text-blue-400">
+                     frontend
                   </TouchableLink>
                </div>
             </div>
