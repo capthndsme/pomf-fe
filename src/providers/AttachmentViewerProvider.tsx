@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import RenderPreview from "@/components/RenderPreview";
 import { X, FileIcon, Info, Share2, Download, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ export const AttachmentViewerProvider = ({ children }: { children: ReactNode }) 
   const [previewItem, setPreviewItem] = useState<FileItem | null>(null);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [showShareFileModal, setShowShareFileModal] = useState(false);
+  const pushedHistoryRef = useRef(false);
 
   const previewFile = async (file: FileItem) => {
     // Sanitize file object to handle leaky booleans (0/1 to false/true)
@@ -43,8 +44,34 @@ export const AttachmentViewerProvider = ({ children }: { children: ReactNode }) 
   };
 
   const closePreview = () => {
+    // If we pushed a history entry for the preview, go back so the back button feels natural.
+    if (pushedHistoryRef.current) {
+      pushedHistoryRef.current = false;
+      window.history.back();
+      return;
+    }
     setPreviewItem(null);
   };
+
+  // Back button should close the preview overlay
+  useEffect(() => {
+    if (!previewItem) return;
+
+    // Push a state entry once per open so "Back" closes the preview instead of leaving the page.
+    if (!pushedHistoryRef.current) {
+      window.history.pushState({ ...(window.history.state || {}), attachmentPreview: true }, "");
+      pushedHistoryRef.current = true;
+    }
+
+    const onPopState = () => {
+      // Close the preview when navigating back.
+      pushedHistoryRef.current = false;
+      setPreviewItem(null);
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [previewItem]);
 
   const { urls: viewUrls, isLoading: isLoadingViewUrls, error: viewUrlsError } = useFileViewUrls(previewItem);
 
@@ -123,7 +150,7 @@ export const AttachmentViewerProvider = ({ children }: { children: ReactNode }) 
 
             {/* Media Section */}
             <div className={cn(
-               "flex-1 flex items-center justify-center p-4 lg:p-8 relative h-full overflow-hidden",
+               "flex-1 flex items-center justify-center p-4 pb-28 lg:p-8 relative h-full overflow-hidden",
                isPortrait ? "lg:pr-4" : ""
             )}>
                <div 
@@ -164,7 +191,7 @@ export const AttachmentViewerProvider = ({ children }: { children: ReactNode }) 
                            <RenderPreview
                               item={previewItem}
                               urls={viewUrls}
-                              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                              className="max-w-full max-h-[calc(100vh-220px)] sm:max-h-[calc(100vh-240px)] lg:max-h-[85vh] object-contain rounded-lg shadow-2xl"
                            />
                         )}
                      </>

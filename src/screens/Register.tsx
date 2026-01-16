@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "../providers/AuthProvider";
@@ -16,14 +16,16 @@ const Register = () => {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    const { register, isAuthenticated } = useAuth();
+    const { register, isAuthenticated, isLoading: isAuthLoading } = useAuth();
     const navigate = useNavigate();
 
-    // Redirect if already authenticated
-    if (isAuthenticated) {
-        navigate("/my-files", { replace: true });
-        return null;
-    }
+    // Redirect if already authenticated (avoid navigating during render)
+    useEffect(() => {
+        if (isAuthLoading) return;
+        if (isAuthenticated) {
+            navigate("/my-files", { replace: true });
+        }
+    }, [isAuthenticated, isAuthLoading, navigate]);
 
     // Password strength checks
     const hasMinLength = password.length >= 8;
@@ -47,7 +49,7 @@ const Register = () => {
         setIsLoading(true);
 
         try {
-            await register(email, username, password, fullName || undefined);
+            await register(email.trim(), username.trim(), password, fullName.trim() || undefined);
             navigate("/my-files", { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : "Registration failed. Please try again.");

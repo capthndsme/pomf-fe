@@ -304,14 +304,14 @@ const MyFiles = () => {
                                         <div className="min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <p className="font-medium text-white truncate">{file.name}</p>
-                                                {file.isPrivate && (
+                                                {!!file.isPrivate && (
                                                     <span title="Private">
                                                         <Lock size={12} className="text-yellow-400 flex-shrink-0" />
                                                     </span>
                                                 )}
                                             </div>
                                             <p className="text-sm text-white/40">
-                                                {file.isFolder ? 'Folder' : formatFileSize(file.fileSize)}
+                                                {!!file.isFolder ? 'Folder' : formatFileSize(file.fileSize)}
                                             </p>
                                         </div>
                                     </div>

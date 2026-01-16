@@ -67,10 +67,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const login = useCallback(async (emailOrUsername: string, password: string) => {
-        const isEmail = emailOrUsername.includes('@');
+        const identifier = emailOrUsername.trim();
+        const isEmail = identifier.includes('@');
         try {
             const response = await axiosInstance.post('/auth/login', {
-                [isEmail ? 'email' : 'username']: emailOrUsername,
+                [isEmail ? 'email' : 'username']: identifier,
                 password,
             });
 
@@ -97,10 +98,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const register = useCallback(async (email: string, username: string, password: string, fullName?: string) => {
         try {
             const response = await axiosInstance.post('/auth/register', {
-                email,
-                username,
+                email: email.trim(),
+                username: username.trim(),
                 password,
-                fullName,
+                fullName: fullName?.trim() || undefined,
             });
 
             if (response.data?.status === 'success' && response.data?.data) {

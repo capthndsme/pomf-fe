@@ -1,7 +1,8 @@
 import RenderPreview from "@/components/RenderPreview";
 import { TouchableLink } from "@/components/TouchableLink";
 import { BRANDING } from "@/constants";
-import { ApiResponseError, useResolveLinkToFile } from "@/hooks/useResolveLinkToFile";
+import { ApiResponseError } from "@/hooks/useResolveLinkToFile";
+import { useResolveShareSurface } from "@/hooks/useResolveShareSurface";
 import { cn } from "@/lib/utils";
 import {
    Download,
@@ -56,8 +57,9 @@ const ShareLinkError = ({ message }: { message?: string }) => (
 
 const ShareLink = () => {
    const { id } = useParams();
-   const { data: file, isLoading, isError, error } = useResolveLinkToFile(id ?? "");
+   const { data, isLoading, isError, error } = useResolveShareSurface(id ?? "");
    const [showInfoPanel, setShowInfoPanel] = useState(false);
+   const file = data?.file ?? null;
 
    const handleShare = async () => {
       const shareUrl = window.location.href;
@@ -115,7 +117,7 @@ const ShareLink = () => {
 
    const isTranscoding = file.transcodeStatus !== 'finished';
    const canPreview = file.fileType === 'IMAGE' || file.fileType === 'VIDEO' || file.fileType === 'AUDIO' || file.fileType === 'DOCUMENT' || file.fileType === 'PLAINTEXT';
-   const viewUrls = buildPublicViewUrls(file);
+   const viewUrls = data?.kind === 'file-share' ? data.viewUrls : buildPublicViewUrls(file);
    const directUrl = viewUrls?.originalUrl ?? null;
    const canPreviewWithUrls = canPreview && !!directUrl && !!viewUrls;
 

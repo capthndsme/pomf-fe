@@ -26,7 +26,9 @@ const ShareFileModal = ({ file, onClose }: ShareFileModalProps) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [shareUrl, setShareUrl] = useState<string | null>(null);
+    const [directUrl, setDirectUrl] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [copiedDirect, setCopiedDirect] = useState(false);
     const [expiresAt, setExpiresAt] = useState<Date | null>(null);
 
     const handleSubmit = async (e: FormEvent) => {
@@ -45,8 +47,9 @@ const ShareFileModal = ({ file, onClose }: ShareFileModalProps) => {
             });
 
             if (response.data?.status === 'success') {
-                const { url, expiresIn: returnedExpiresIn } = response.data.data;
-                setShareUrl(url);
+                const { url, shareUrl, directUrl, expiresIn: returnedExpiresIn } = response.data.data;
+                setShareUrl(shareUrl || url);
+                setDirectUrl(directUrl || null);
 
                 if (returnedExpiresIn) {
                     setExpiresAt(new Date(Date.now() + returnedExpiresIn * 1000));
@@ -66,6 +69,14 @@ const ShareFileModal = ({ file, onClose }: ShareFileModalProps) => {
             await navigator.clipboard.writeText(shareUrl);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    const handleCopyDirect = async () => {
+        if (directUrl) {
+            await navigator.clipboard.writeText(directUrl);
+            setCopiedDirect(true);
+            setTimeout(() => setCopiedDirect(false), 2000);
         }
     };
 
@@ -130,21 +141,47 @@ const ShareFileModal = ({ file, onClose }: ShareFileModalProps) => {
                             </div>
                         )}
 
-                        <div className="flex items-center gap-2 p-3 bg-white/10 rounded-lg mb-4">
-                            <input
-                                type="text"
-                                value={shareUrl}
-                                readOnly
-                                className="flex-1 bg-transparent text-white text-sm outline-none"
-                            />
-                            <button
-                                onClick={handleCopy}
-                                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
-                                title="Copy link"
-                            >
-                                {copied ? <Check size={18} /> : <Copy size={18} />}
-                            </button>
+                        <div className="mb-4">
+                            <p className="text-[11px] font-semibold text-white/60 uppercase tracking-wider mb-2">Share Link</p>
+                            <div className="flex items-center gap-2 p-3 bg-white/10 rounded-lg">
+                                <input
+                                    type="text"
+                                    value={shareUrl}
+                                    readOnly
+                                    className="flex-1 bg-transparent text-white text-sm outline-none"
+                                />
+                                <button
+                                    onClick={handleCopy}
+                                    className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                                    title="Copy share link"
+                                >
+                                    {copied ? <Check size={18} /> : <Copy size={18} />}
+                                </button>
+                            </div>
                         </div>
+
+                        {directUrl && (
+                            <div className="mb-4">
+                                <p className="text-[11px] font-semibold text-white/60 uppercase tracking-wider mb-2">
+                                    Direct Link {expiresAt ? "(expires)" : ""}
+                                </p>
+                                <div className="flex items-center gap-2 p-3 bg-white/10 rounded-lg">
+                                    <input
+                                        type="text"
+                                        value={directUrl}
+                                        readOnly
+                                        className="flex-1 bg-transparent text-white text-sm outline-none"
+                                    />
+                                    <button
+                                        onClick={handleCopyDirect}
+                                        className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                                        title="Copy direct link"
+                                    >
+                                        {copiedDirect ? <Check size={18} /> : <Copy size={18} />}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="flex gap-3">
                             {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
@@ -176,7 +213,7 @@ const ShareFileModal = ({ file, onClose }: ShareFileModalProps) => {
                         {file.isPrivate && (
                             <div className="mb-4 p-3 rounded-lg bg-yellow-500/20 border border-yellow-500/30 text-yellow-200 text-sm flex items-center gap-2">
                                 <Clock size={16} />
-                                <span>Private files generate temporary links that expire</span>
+                                <span>Private files: Share Link is a stable /s link; Direct Link expires</span>
                             </div>
                         )}
 

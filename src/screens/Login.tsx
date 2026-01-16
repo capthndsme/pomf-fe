@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "../providers/AuthProvider";
@@ -12,14 +12,16 @@ const Login = () => {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    const { login, isAuthenticated } = useAuth();
+    const { login, isAuthenticated, isLoading: isAuthLoading } = useAuth();
     const navigate = useNavigate();
 
-    // Redirect if already authenticated
-    if (isAuthenticated) {
-        navigate("/my-files", { replace: true });
-        return null;
-    }
+    // Redirect if already authenticated (avoid navigating during render)
+    useEffect(() => {
+        if (isAuthLoading) return;
+        if (isAuthenticated) {
+            navigate("/my-files", { replace: true });
+        }
+    }, [isAuthenticated, isAuthLoading, navigate]);
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
@@ -27,7 +29,7 @@ const Login = () => {
         setIsLoading(true);
 
         try {
-            await login(emailOrUsername, password);
+            await login(emailOrUsername.trim(), password);
             navigate("/my-files", { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : "Login failed. Please try again.");
