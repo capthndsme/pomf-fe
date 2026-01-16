@@ -1,0 +1,226 @@
+# ============================================================================
+# Pomf Frontend - Apache Configuration
+# Social Media Crawler Detection & Embed Redirect
+# ============================================================================
+# 
+# This configuration:
+# 1. Detects social media crawlers by User-Agent
+# 2. Redirects crawlers to the embed API for rich previews
+# 3. Serves the React SPA to normal users
+# 4. Handles SPA routing (all routes -> index.html)
+#
+# ============================================================================
+
+RewriteEngine On
+RewriteBase /
+
+# ============================================================================
+# SOCIAL MEDIA CRAWLER DETECTION
+# Redirect crawlers to embed API for Open Graph / Twitter Card parsing
+# ============================================================================
+
+# --- Discord ---
+# Discord uses various bots with "Discordbot" in the User-Agent
+RewriteCond %{HTTP_USER_AGENT} "Discordbot" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Discord" [NC,OR]
+
+# --- Facebook / Meta ---
+# Facebook's crawler (used by Messenger, Instagram, WhatsApp)
+RewriteCond %{HTTP_USER_AGENT} "facebookexternalhit" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Facebot" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "facebookcatalog" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "facebookplatform" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "WhatsApp" [NC,OR]
+
+# --- Twitter / X ---
+RewriteCond %{HTTP_USER_AGENT} "Twitterbot" [NC,OR]
+
+# --- Slack ---
+RewriteCond %{HTTP_USER_AGENT} "Slackbot" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Slack-ImgProxy" [NC,OR]
+
+# --- LinkedIn ---
+RewriteCond %{HTTP_USER_AGENT} "LinkedInBot" [NC,OR]
+
+# --- Telegram ---
+RewriteCond %{HTTP_USER_AGENT} "TelegramBot" [NC,OR]
+
+# --- Reddit ---
+RewriteCond %{HTTP_USER_AGENT} "redditbot" [NC,OR]
+
+# --- Skype ---
+RewriteCond %{HTTP_USER_AGENT} "SkypeUriPreview" [NC,OR]
+
+# --- Microsoft Teams ---
+RewriteCond %{HTTP_USER_AGENT} "MicrosoftPreview" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Microsoft-WebPreview" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Microsoft Office" [NC,OR]
+
+# --- Pinterest ---
+RewriteCond %{HTTP_USER_AGENT} "Pinterest" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Pinterestbot" [NC,OR]
+
+# --- Tumblr ---
+RewriteCond %{HTTP_USER_AGENT} "Tumblr" [NC,OR]
+
+# --- Line ---
+RewriteCond %{HTTP_USER_AGENT} "Line" [NC,OR]
+
+# --- Viber ---
+RewriteCond %{HTTP_USER_AGENT} "Viber" [NC,OR]
+
+# --- Snapchat ---
+RewriteCond %{HTTP_USER_AGENT} "Snapchat" [NC,OR]
+
+# --- iMessage / Apple Messages ---
+RewriteCond %{HTTP_USER_AGENT} "AppleWebKit.*Macintosh" [NC,OR]
+
+# --- Signal ---
+RewriteCond %{HTTP_USER_AGENT} "Signal" [NC,OR]
+
+# --- Mastodon / Fediverse ---
+RewriteCond %{HTTP_USER_AGENT} "Mastodon" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Pleroma" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Misskey" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Akkoma" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "ActivityPub" [NC,OR]
+
+# --- Google ---
+# Google Chat and Google+ (legacy)
+RewriteCond %{HTTP_USER_AGENT} "Google-Chat" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Google.*snippet" [NC,OR]
+
+# --- Yahoo ---
+RewriteCond %{HTTP_USER_AGENT} "Y!J-LinkPreview" [NC,OR]
+
+# --- Kakao ---
+# Korean messaging app
+RewriteCond %{HTTP_USER_AGENT} "kakaotalk-scrap" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "KakaoTalkBot" [NC,OR]
+
+# --- Naver ---
+# Korean search/social
+RewriteCond %{HTTP_USER_AGENT} "Yeti" [NC,OR]
+
+# --- VK (VKontakte) ---
+RewriteCond %{HTTP_USER_AGENT} "vkShare" [NC,OR]
+
+# --- Weibo ---
+RewriteCond %{HTTP_USER_AGENT} "Weibo" [NC,OR]
+
+# --- QQ / WeChat (Tencent) ---
+RewriteCond %{HTTP_USER_AGENT} "Qzone" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "QQ" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "MicroMessenger" [NC,OR]
+
+# --- Notion ---
+RewriteCond %{HTTP_USER_AGENT} "Notion" [NC,OR]
+
+# --- Embedly ---
+# Used by many services for link previews
+RewriteCond %{HTTP_USER_AGENT} "Embedly" [NC,OR]
+
+# --- Iframely ---
+# Another popular embed service
+RewriteCond %{HTTP_USER_AGENT} "Iframely" [NC,OR]
+
+# --- Generic Preview/Unfurl Bots ---
+RewriteCond %{HTTP_USER_AGENT} "unfurl" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "preview" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "link-preview" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "LinkExpander" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Outbrain" [NC,OR]
+
+# --- Open Graph Validators/Debuggers ---
+# These are useful for testing
+RewriteCond %{HTTP_USER_AGENT} "developers.google.com/+/web/snippet" [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} "Google-Structured-Data-Testing-Tool" [NC]
+
+# ============================================================================
+# REDIRECT RULE FOR /s/:alias SHARE PAGES
+# Crawlers hitting share pages get redirected to embed API
+# ============================================================================
+
+# Match /s/{alias} pattern and redirect crawlers to embed API
+RewriteRule ^s/([a-zA-Z0-9_-]+)$ https://share-apis.capthnds.me/embed/$1 [R=302,L]
+
+# ============================================================================
+# oEMBED DISCOVERY REDIRECT
+# Redirect oEmbed requests to the API
+# ============================================================================
+
+RewriteRule ^oembed$ https://share-apis.capthnds.me/oembed [R=302,QSA,L]
+
+# ============================================================================
+# REACT SPA ROUTING
+# For normal users - serve index.html for all non-file routes
+# ============================================================================
+
+# Don't rewrite files or directories that exist
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Don't rewrite requests for assets
+RewriteCond %{REQUEST_URI} !^/assets/
+RewriteCond %{REQUEST_URI} !^/static/
+RewriteCond %{REQUEST_URI} !^/favicon\.ico$
+RewriteCond %{REQUEST_URI} !^/robots\.txt$
+RewriteCond %{REQUEST_URI} !^/sitemap\.xml$
+RewriteCond %{REQUEST_URI} !^/manifest\.json$
+RewriteCond %{REQUEST_URI} !^/vite\.svg$
+
+# Serve index.html for SPA routing
+RewriteRule ^ index.html [L]
+
+# ============================================================================
+# SECURITY HEADERS
+# ============================================================================
+
+<IfModule mod_headers.c>
+    # Prevent MIME type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+    
+    # Prevent clickjacking
+    Header always set X-Frame-Options "SAMEORIGIN"
+    
+    # XSS Protection
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    # Referrer Policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ============================================================================
+# CACHING
+# ============================================================================
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    
+    # Static assets - cache for 1 year (they have hash in filename)
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+    
+    # HTML - don't cache (always serve fresh for SPA)
+    ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# ============================================================================
+# COMPRESSION
+# ============================================================================
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
