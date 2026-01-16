@@ -2,10 +2,12 @@ import type FileItem from "../../types/response/FileItem";
 import BlurhashImage from "./BlurhashImage";
 import { useState, useRef, useEffect, useMemo } from "react";
 import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
 import { Blurhash } from "react-blurhash";
 import { Loader2, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { FileViewUrls } from "@/lib/fileViewUrls";
 
 /**
  * Video player with blurhash placeholder and controls
@@ -124,31 +126,43 @@ const VideoWithBlurhash = ({
  * RenderPreview - Renders appropriate preview based on file type
  * Handles missing preview data gracefully
  */
-const RenderPreview = ({ item, className }: { item: FileItem; className?: string }) => {
+const RenderPreview = ({
+  item,
+  urls,
+  className,
+}: {
+  item: FileItem;
+  urls: FileViewUrls;
+  className?: string;
+}) => {
   const [open, setOpen] = useState(false);
 
-  // Sort previews by quality ascending to find the lowest quality
-  const sortedPreviews = useMemo(
-    () =>
-      item.previews && Array.isArray(item.previews)
-        ? [...item.previews].sort(
-          (a, b) => Number(a.quality) - Number(b.quality)
-        )
-        : [],
-    [item.previews]
+  const allPreviews = useMemo(() => (Array.isArray(urls?.previews) ? urls.previews : []), [urls?.previews]);
+
+  const sortedVideoPreviews = useMemo(
+    () => [...allPreviews].filter((p) => p.mimeType?.startsWith("video/")).sort((a, b) => Number(a.quality) - Number(b.quality)),
+    [allPreviews]
   );
 
-  // Default to the lowest available resolution for video
-  const [selectedResolution, setSelectedResolution] = useState<string | null>(
-    sortedPreviews.length > 0 ? sortedPreviews[0].quality.toString() : null
+  const sortedImagePreviews = useMemo(
+    () => [...allPreviews].filter((p) => p.mimeType?.startsWith("image/")).sort((a, b) => Number(a.quality) - Number(b.quality)),
+    [allPreviews]
   );
 
-  const handleResolutionChange = (
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    setSelectedResolution(
-      event.target.value === "" ? null : event.target.value
-    );
+  // Default to the lowest available resolution for video (fast start)
+  const [selectedResolution, setSelectedResolution] = useState<string>("original");
+
+  useEffect(() => {
+    // Reset whenever the file changes
+    if (sortedVideoPreviews.length > 0) {
+      setSelectedResolution(sortedVideoPreviews[0].quality.toString());
+    } else {
+      setSelectedResolution("original");
+    }
+  }, [item?.id, sortedVideoPreviews.length]);
+
+  const handleResolutionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedResolution(event.target.value);
   };
 
   // Calculate safe aspect ratio
@@ -159,23 +173,16 @@ const RenderPreview = ({ item, className }: { item: FileItem; className?: string
     return "16 / 9";
   }, [item.itemWidth, item.itemHeight]);
 
-  // Build base URL once
-  const baseUrl = item.serverShard?.domain
-    ? `https://${item.serverShard.domain}`
-    : null;
-
-  // Determine the video URL based on the selected resolution
+  const originalUrl = urls?.originalUrl ?? null;
   const videoUrl = useMemo(() => {
-    if (!baseUrl || !item.fileKey) return null;
+    if (!originalUrl) return null;
+    if (selectedResolution === "original") return originalUrl;
+    const match = sortedVideoPreviews.find((p) => p.quality.toString() === selectedResolution);
+    return match?.url || originalUrl;
+  }, [originalUrl, selectedResolution, sortedVideoPreviews]);
 
-    if (selectedResolution) {
-      return `${baseUrl}/${item.fileKey}_${selectedResolution}p.mp4`;
-    }
-    return `${baseUrl}/${item.fileKey}`;
-  }, [baseUrl, item.fileKey, selectedResolution]);
-
-  // Guard: No server shard means no preview possible
-  if (!baseUrl || !item.fileKey) {
+  // Guard: No URL means no preview possible
+  if (!originalUrl) {
     return (
       <div className={cn("p-8 text-center text-slate-400", className)}>
         <p>Preview not available</p>
@@ -185,18 +192,8 @@ const RenderPreview = ({ item, className }: { item: FileItem; className?: string
 
   switch (item.fileType) {
     case "IMAGE": {
-      const directUrl = `${baseUrl}/${item.fileKey}`;
-
-      // Find low-res image preview if available
-      const lowResPreview = sortedPreviews.find((p) =>
-        p.mimeType?.startsWith("image/")
-      );
-
-      // Build low-res URL
-      const fileKeyBase = item.fileKey?.split("/")[0];
-      const lowResSrc = lowResPreview
-        ? `${baseUrl}/${fileKeyBase}/${lowResPreview.previewKey}`
-        : directUrl;
+      const directUrl = originalUrl;
+      const lowResSrc = sortedImagePreviews.length > 0 ? sortedImagePreviews[0].url : directUrl;
 
       return (
         <>
@@ -213,6 +210,7 @@ const RenderPreview = ({ item, className }: { item: FileItem; className?: string
             open={open}
             close={() => setOpen(false)}
             slides={[{ src: directUrl }]}
+            plugins={[Zoom]}
           />
         </>
       );
@@ -230,10 +228,7 @@ const RenderPreview = ({ item, className }: { item: FileItem; className?: string
         );
       }
 
-      // Filter video previews
-      const videoPreviews = sortedPreviews.filter((p) =>
-        p.mimeType?.startsWith("video/")
-      );
+      const videoPreviews = sortedVideoPreviews;
 
       return (
         <div className={cn("w-full", className)}>
@@ -251,10 +246,10 @@ const RenderPreview = ({ item, className }: { item: FileItem; className?: string
               <select
                 id="resolution"
                 onChange={handleResolutionChange}
-                value={selectedResolution ?? ""}
+                value={selectedResolution}
                 className="bg-slate-800 text-white text-sm px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               >
-                <option value="">Original</option>
+                <option value="original">Original</option>
                 {videoPreviews.map((preview) => (
                   <option
                     key={preview.quality}
@@ -279,7 +274,7 @@ const RenderPreview = ({ item, className }: { item: FileItem; className?: string
             preload="metadata"
           >
             <source
-              src={`${baseUrl}/${item.fileKey}`}
+              src={originalUrl}
               type={item.mimeType ?? "audio/mpeg"}
             />
             Your browser does not support the audio tag.
@@ -289,12 +284,23 @@ const RenderPreview = ({ item, className }: { item: FileItem; className?: string
 
     case "DOCUMENT":
     case "PLAINTEXT":
+      // For PDFs, use native embed for better browser support
+      if (item.mimeType === 'application/pdf') {
+         return (
+             <embed
+                 src={originalUrl}
+                 type="application/pdf"
+                 className={cn("w-full h-full rounded-lg border border-slate-800 bg-slate-900", className)}
+                 style={{ minHeight: "80vh" }}
+             />
+         );
+      }
       return (
         <iframe
-          src={`${baseUrl}/${item.fileKey}`}
+          src={originalUrl}
           title={item.originalFileName ?? "Document"}
-          className={cn("w-full rounded-lg border border-slate-800", className)}
-          style={{ aspectRatio: "4 / 3", minHeight: "400px" }}
+          className={cn("w-full h-full rounded-lg border border-slate-800 bg-white", className)}
+          style={{ aspectRatio: "4 / 3", minHeight: "80vh" }}
         />
       );
 

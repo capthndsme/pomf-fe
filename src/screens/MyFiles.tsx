@@ -18,14 +18,18 @@ import {
     Loader2,
     Upload,
     MoreVertical,
-    Lock
+    Lock,
+    Link as LinkIcon,
+    Check
 } from "lucide-react";
 import CreateFolderModal from "@/components/CreateFolderModal";
 import ShareFolderModal from "@/components/ShareFolderModal";
 import ShareFileModal from "@/components/ShareFileModal";
 import UploadQueue from "@/components/UploadQueue";
 import { useUploader } from "@/providers/UploaderProvider";
+import { useAttachmentViewer } from "@/providers/AttachmentViewerProvider";
 import type FileItem from "../../types/response/FileItem";
+import { toSharedFileUrl } from "@/lib/shareLinks";
 
 interface Breadcrumb {
     id: string | null;
@@ -53,6 +57,7 @@ const MyFiles = () => {
     const navigate = useNavigate();
     const { } = useAuth();
     const { uploadFile, isUploading, sessions, clearCompletedSessions } = useUploader();
+    const { previewFile } = useAttachmentViewer();
 
     const [files, setFiles] = useState<FileItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -65,6 +70,7 @@ const MyFiles = () => {
     const [showShareFileModal, setShowShareFileModal] = useState(false);
     const [selectedFolder, setSelectedFolder] = useState<FileItem | null>(null);
     const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
 
     // Fetch breadcrumbs when folder changes
     const fetchBreadcrumbs = useCallback(async () => {
@@ -141,7 +147,7 @@ const MyFiles = () => {
     const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             const filesToUpload = Array.from(e.target.files);
-            uploadFile(filesToUpload, { folderId: folderId ?? null });
+            uploadFile(filesToUpload, { folderId: folderId ?? null, isPrivate: true });
             // Reset input
             e.target.value = '';
         }
@@ -152,9 +158,21 @@ const MyFiles = () => {
     };
 
     const handleFileClick = (file: FileItem) => {
-        // Open in share link view
-        if (file.serverShard?.domain && file.id) {
-            window.open(`/s/${file.id}`, '_blank');
+        // Open in previewer
+        previewFile(file);
+    };
+
+    const handleCopyLink = async (e: React.MouseEvent, file: FileItem) => {
+        e.stopPropagation();
+        if (file.id) {
+            const url = toSharedFileUrl(file.id);
+            try {
+                await navigator.clipboard.writeText(url);
+                setCopiedId(file.id);
+                setTimeout(() => setCopiedId(null), 2000);
+            } catch (err) {
+                console.error("Failed to copy", err);
+            }
         }
     };
 
@@ -300,6 +318,15 @@ const MyFiles = () => {
 
                                     {/* Actions */}
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {!file.isFolder && !file.isPrivate && (
+                                            <button
+                                                onClick={(e) => handleCopyLink(e, file)}
+                                                className="p-2 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                                                title="Copy public link"
+                                            >
+                                                {copiedId === file.id ? <Check size={16} className="text-green-400" /> : <LinkIcon size={16} />}
+                                            </button>
+                                        )}
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();

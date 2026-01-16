@@ -1,8 +1,9 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useParams } from "react-router-dom";
 import Topbar from "@/components/Topbar";
 import FullsizeSpinner from "@/components/FullsizeSpinner";
 import { useAuth } from "@/providers/AuthProvider";
+import { AttachmentViewerProvider } from "@/providers/AttachmentViewerProvider";
 
 const Landing = lazy(() => import("@/screens/Landing"));
 const Protected = lazy(() => import("@/screens/Protected"));
@@ -11,7 +12,11 @@ const StatusPage = lazy(() => import("@/screens/StatusPage"));
 const Login = lazy(() => import("@/screens/Login"));
 const Register = lazy(() => import("@/screens/Register"));
 const MyFiles = lazy(() => import("@/screens/MyFiles"));
-const SharedFolder = lazy(() => import("@/screens/SharedFolder"));
+
+const FolderShareRedirect = () => {
+  const { shareId } = useParams<{ shareId: string }>();
+  return <Navigate to={`/s/${shareId ?? ""}`} replace />;
+};
 
 // Protected route wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -31,16 +36,18 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   return (
     <BrowserRouter>
-      <Topbar />
-      <Suspense fallback={<FullsizeSpinner />}>
-        <Routes>
-          {/* Public routes */}
+      <AttachmentViewerProvider>
+        <Topbar />
+        <Suspense fallback={<FullsizeSpinner />}>
+          <Routes>
+            {/* Public routes */}
           <Route path="/" element={<Landing />} />
           <Route path="/s/:id" element={<ShareLink />} />
           <Route path="/status" element={<StatusPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/folder/:shareId" element={<SharedFolder />} />
+          {/* Back-compat: old folder-share route redirects to canonical /s/:id surface */}
+          <Route path="/folder/:shareId" element={<FolderShareRedirect />} />
 
           {/* Protected routes */}
           <Route
@@ -67,10 +74,10 @@ function App() {
               </ProtectedRoute>
             }
           />
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
-  );
-}
-
+                  </Routes>
+                </Suspense>
+              </AttachmentViewerProvider>
+            </BrowserRouter>
+          );
+        }
 export default App;

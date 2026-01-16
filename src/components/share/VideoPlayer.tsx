@@ -3,6 +3,7 @@ import { AlertCircle, Loader2, Sparkles, ChevronDown } from "lucide-react";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Blurhash } from "react-blurhash";
 import type FileItem from "../../../types/response/FileItem";
+import type { FileViewUrls } from "@/lib/fileViewUrls";
 
 /**
  * ABR Configuration
@@ -28,10 +29,10 @@ const ABR_CONFIG = {
  */
 export const VideoPlayer = ({
     item,
-    baseUrl,
+    urls,
 }: {
     item: FileItem;
-    baseUrl: string;
+    urls: FileViewUrls;
 }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isLoaded, setIsLoaded] = useState(false);
@@ -45,16 +46,13 @@ export const VideoPlayer = ({
     const smoothPlaybackStartRef = useRef<number>(0);
     const qualityChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Sort previews by quality ascending (480, 720, 1080)
-    const sortedPreviews = useMemo(
-        () =>
-            item.previews && Array.isArray(item.previews)
-                ? [...item.previews]
-                    .filter((p) => p.mimeType?.startsWith("video/"))
-                    .sort((a, b) => Number(a.quality) - Number(b.quality))
-                : [],
-        [item.previews]
-    );
+    // Use resolved preview URLs (supports both public and private)
+    const sortedPreviews = useMemo(() => {
+        const previews = Array.isArray(urls?.previews) ? urls.previews : [];
+        return [...previews]
+            .filter((p) => p.mimeType?.startsWith("video/"))
+            .sort((a, b) => Number(a.quality) - Number(b.quality));
+    }, [urls?.previews]);
 
     // Available qualities including "original" at the end (highest)
     const qualityLevels = useMemo(() => {
@@ -69,12 +67,12 @@ export const VideoPlayer = ({
     );
 
     const videoUrl = useMemo(() => {
-        if (!item.fileKey) return null;
-        if (currentQuality !== "original") {
-            return `${baseUrl}/${item.fileKey}_${currentQuality}p.mp4`;
-        }
-        return `${baseUrl}/${item.fileKey}`;
-    }, [baseUrl, item.fileKey, currentQuality]);
+        const originalUrl = urls?.originalUrl;
+        if (!originalUrl) return null;
+        if (currentQuality === "original") return originalUrl;
+        const match = sortedPreviews.find((p) => p.quality.toString() === currentQuality);
+        return match?.url || originalUrl;
+    }, [urls?.originalUrl, currentQuality, sortedPreviews]);
 
     // Get current quality index (higher = better quality)
     const getCurrentQualityIndex = () => qualityLevels.indexOf(currentQuality);

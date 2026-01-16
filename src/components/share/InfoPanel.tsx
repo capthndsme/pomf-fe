@@ -24,17 +24,20 @@ import { formatFileSize, formatRelativeTime } from "./formatters";
 export const InfoPanel = ({
     file,
     directUrl,
+    shareUrl,
     isOpen,
     onClose,
     onShare,
 }: {
     file: FileItem;
     directUrl: string | null;
+    shareUrl?: string;
     isOpen: boolean;
     onClose: () => void;
     onShare?: () => void;
 }) => {
     const canPreview = file.fileType === 'IMAGE' || file.fileType === 'VIDEO' || file.fileType === 'AUDIO';
+    const displayShareUrl = shareUrl || window.location.href;
 
     return (
         <div className={cn(
@@ -80,9 +83,9 @@ export const InfoPanel = ({
                         <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Share Link</p>
                         <div className="flex items-center gap-1">
                             <code className="flex-1 text-xs text-blue-400 font-mono break-all line-clamp-2">
-                                {window.location.href}
+                                {displayShareUrl}
                             </code>
-                            <CopyButton text={window.location.href} size="sm" />
+                            <CopyButton text={displayShareUrl} size="sm" />
                         </div>
                     </div>
 

@@ -13,6 +13,8 @@ import {
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useParams } from "react-router-dom";
+import SharedFolder from "@/screens/SharedFolder";
+import { buildPublicViewUrls } from "@/lib/fileViewUrls";
 
 // Import share components
 import { VideoPlayer, InfoPanel } from "@/components/share";
@@ -92,19 +94,19 @@ const ShareLink = () => {
    }
 
    if (isError || !file) {
+      // /s/:id is a share surface: it can be a file alias OR a folder shareId.
+      // If file resolution fails, fall back to shared-folder rendering.
+      if (id) {
+         return <SharedFolder shareIdOverride={id} />;
+      }
       return <ShareLinkError message={(error as Error)?.message} />;
    }
 
-   const baseUrl = file.serverShard?.domain
-      ? `https://${file.serverShard.domain}`
-      : null;
-
-   const directUrl = file.fileKey && baseUrl
-      ? `${baseUrl}/${file.fileKey}`
-      : null;
-
    const isTranscoding = file.transcodeStatus !== 'finished';
-   const canPreview = file.fileType === 'IMAGE' || file.fileType === 'VIDEO' || file.fileType === 'AUDIO';
+   const canPreview = file.fileType === 'IMAGE' || file.fileType === 'VIDEO' || file.fileType === 'AUDIO' || file.fileType === 'DOCUMENT' || file.fileType === 'PLAINTEXT';
+   const viewUrls = buildPublicViewUrls(file);
+   const directUrl = viewUrls?.originalUrl ?? null;
+   const canPreviewWithUrls = canPreview && !!directUrl && !!viewUrls;
 
    // Calculate aspect ratio for sizing
    const hasValidDimensions = file.itemWidth && file.itemHeight;
@@ -115,8 +117,8 @@ const ShareLink = () => {
       <>
          <Helmet>
             <title>{file.originalFileName} • {BRANDING || "Pomf"}</title>
-            {file.previewBlurHash && (
-               <meta property="og:image" content={`https://${file.serverShard?.domain}/${file.previewKey}`} />
+            {file.previewBlurHash && viewUrls?.thumbnailUrl && (
+               <meta property="og:image" content={viewUrls.thumbnailUrl} />
             )}
          </Helmet>
 
@@ -140,7 +142,7 @@ const ShareLink = () => {
                      ? "max-w-[min(100%,400px)] lg:max-w-[min(100%,500px)]"
                      : "max-w-full"
                )}>
-                  {canPreview && baseUrl && directUrl ? (
+                  {canPreviewWithUrls && viewUrls ? (
                      <>
                         {isTranscoding && !file.previewBlurHash ? (
                            <div className="text-center p-8 rounded-2xl bg-slate-900/50 backdrop-blur-md border border-slate-700/50">
@@ -155,10 +157,11 @@ const ShareLink = () => {
                               <p className="text-sm text-slate-400 mt-1">Optimization in progress...</p>
                            </div>
                         ) : file.fileType === 'VIDEO' ? (
-                           <VideoPlayer item={file} baseUrl={baseUrl} />
+                           <VideoPlayer item={file} urls={viewUrls} />
                         ) : (
                            <RenderPreview
                               item={file}
+                              urls={viewUrls}
                               className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
                            />
                         )}

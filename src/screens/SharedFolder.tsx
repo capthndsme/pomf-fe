@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
+import { buildPublicUrl } from "@/lib/fileViewUrls";
 
 interface FileItem {
     id: string;
@@ -70,8 +71,9 @@ const formatFileSize = (bytes?: number): string => {
     return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 };
 
-const SharedFolder = () => {
-    const { shareId } = useParams<{ shareId: string }>();
+const SharedFolder = ({ shareIdOverride }: { shareIdOverride?: string }) => {
+    const params = useParams<{ shareId?: string; id?: string }>();
+    const shareId = shareIdOverride ?? params.shareId ?? params.id;
 
     const [shareData, setShareData] = useState<ShareData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -161,8 +163,8 @@ const SharedFolder = () => {
         !f.isFolder && (f.mimeType?.startsWith('image/') || f.fileType === 'IMAGE')
     ) || [];
 
-    const lightboxSlides = imageFiles.map(file => ({
-        src: file.serverShard?.domain ? `https://${file.serverShard.domain}/${file.fileKey}` : '',
+        const lightboxSlides = imageFiles.map(file => ({
+        src: buildPublicUrl(file.serverShard?.domain, file.fileKey) ?? '',
         title: file.name,
     }));
 
@@ -292,9 +294,10 @@ const SharedFolder = () => {
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                                 {shareData.files.filter(f => !f.isFolder).map((file) => {
                                     const isImage = file.mimeType?.startsWith('image/') || file.fileType === 'IMAGE';
-                                    const imageUrl = file.serverShard?.domain
-                                        ? `https://${file.serverShard.domain}/${file.previewKey || file.fileKey}`
-                                        : '';
+                                    const imageUrl =
+                                        buildPublicUrl(file.serverShard?.domain, file.previewKey) ??
+                                        buildPublicUrl(file.serverShard?.domain, file.fileKey) ??
+                                        '';
 
                                     return (
                                         <div
@@ -325,9 +328,7 @@ const SharedFolder = () => {
                         {shareData.displayMode === 'list' && shareData.files.length > 0 && (
                             <div className="space-y-2">
                                 {shareData.files.map((file) => {
-                                    const downloadUrl = file.serverShard?.domain
-                                        ? `https://${file.serverShard.domain}/${file.fileKey}`
-                                        : '';
+                                    const downloadUrl = buildPublicUrl(file.serverShard?.domain, file.fileKey) ?? '';
 
                                     return (
                                         <div

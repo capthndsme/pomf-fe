@@ -7,6 +7,7 @@ import { Uploader } from "@/components/Uploader";
 import UUIDService from "@/components/UUIDService";
 import { TouchableLink } from "@/components/TouchableLink";
 import { BRANDING } from "@/constants";
+import { buildPublicViewUrls } from "@/lib/fileViewUrls";
 
 const Landing = () => {
    const serversApi = useCurrentServer();
@@ -47,6 +48,7 @@ const Landing = () => {
       return () => clearInterval(looper);
    }, [serversApi?.currentServer?.domain]);
    const { uploadedFiles } = useUploader();
+
    return (
       <>
          <Helmet>
@@ -104,25 +106,31 @@ const Landing = () => {
                {/* Right Column */}
                <div className="w-full md:w-2/3 bg-blue-950 rounded-lg p-4 text-white">
                   <h2 className="text-2xl font-light mb-4">Current uploads</h2>
-                  {uploadedFiles.map((file) => (
-                     <div key={file.id} className="mb-4 bg-blue-800/30 px-2 py-1 rounded-md">
-                        <p className="text-lg font-semibold">{file.originalFileName}</p>
-                        <a
-                           href={file.fileKey ? `https://${file.serverShard?.domain}/${file.fileKey}` : undefined}
-                           target="_blank"
-                           className="text-blue-400 hover:underline block py-2"
-                        >
-                           Direct: {`https://${file.serverShard?.domain}/${file.fileKey}`}
-                        </a>
-                        <TouchableLink
-                           to={file.fileKey ? `/s/${UUIDService.encode(file.id)}` : undefined}
-                           target="_blank"
-                           className="text-blue-400 hover:underline block py-2"
-                        >
-                           Web Link
-                        </TouchableLink>
-                     </div>
-                  ))}
+                  {uploadedFiles.map((file) => {
+                     const urls = buildPublicViewUrls(file);
+                     const directUrl = urls?.originalUrl ?? null;
+                     const sharePath = `/s/${UUIDService.encode(file.id)}`;
+
+                     return (
+                        <div key={file.id} className="mb-4 bg-blue-800/30 px-2 py-1 rounded-md">
+                           <p className="text-lg font-semibold">{file.originalFileName}</p>
+                           <a
+                              href={directUrl ?? undefined}
+                              target="_blank"
+                              className="text-blue-400 hover:underline block py-2"
+                           >
+                              Direct: {directUrl ?? "(unavailable)"}
+                           </a>
+                           <TouchableLink
+                              to={directUrl ? sharePath : undefined}
+                              target="_blank"
+                              className="text-blue-400 hover:underline block py-2"
+                           >
+                              Web Link
+                           </TouchableLink>
+                        </div>
+                     );
+                  })}
                </div>
             </div>
             <div className=" mt-4 text-sm text-center font-light opacity-70">

@@ -507,8 +507,14 @@ export const useUpload = () => {
             throw new Error("No server selected");
          }
 
-         // Use authenticated endpoint only when saveToHistory is true AND user is logged in
-         const useAuthenticatedUpload = saveToHistory && token;
+         /**
+          * Upload classification:
+          * - Anonymous uploader: passes saveToHistory=false -> /anon-upload (even if logged in)
+          * - My Files / File Manager: typically does not pass saveToHistory -> default to /upload when logged in
+          *
+          * This fixes the bug where My Files uploads were being treated as anonymous.
+          */
+         const useAuthenticatedUpload = !!token && saveToHistory !== false;
          const endpoint = useAuthenticatedUpload ? "upload" : "anon-upload";
 
          return uploadFileEnhanced({

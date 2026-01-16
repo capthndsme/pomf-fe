@@ -42,7 +42,8 @@ const ShareFolderModal = ({ folder, onClose }: ShareFolderModalProps) => {
 
             if (response.data?.status === 'success') {
                 const shareId = response.data.data.id;
-                const url = `${window.location.origin}/folder/${shareId}`;
+                // Use the canonical share surface so links are embeddable/stable.
+                const url = `${window.location.origin}/s/${shareId}`;
                 setShareUrl(url);
             } else {
                 throw new Error(response.data?.message || 'Failed to create share');

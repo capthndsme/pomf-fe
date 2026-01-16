@@ -31,6 +31,10 @@ export interface UploadOptions {
    saveToHistory?: boolean;
 }
 
+const DEFAULT_UPLOAD_OPTIONS: UploadOptions = {
+    // Default options
+};
+
 type UploaderContextType = {
    // All active upload sessions
    sessions: UploadSession[];
@@ -181,7 +185,7 @@ export const UploaderProvider = ({ children }: { children: ReactNode }) => {
          const sessionId = generateSessionId();
          const totalSize = files.reduce((sum, file) => sum + file.size, 0);
          const optimalSettings = getOptimalUploadSettings(files);
-         const finalOptions = { ...optimalSettings, ...options };
+         const finalOptions = { ...DEFAULT_UPLOAD_OPTIONS, ...optimalSettings, ...options };
 
          const session: UploadSession = {
             id: sessionId,
