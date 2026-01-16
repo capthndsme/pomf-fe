@@ -12,17 +12,17 @@ const Landing = () => {
    const serversApi = useCurrentServer();
    const { isAuthenticated } = useAuth();
 
-   const [saveToRoot, setSaveToRoot] = useState<boolean>(() => {
-      return localStorage.getItem('save_to_root') === 'true';
+   const [saveToHistory, setSaveToHistory] = useState<boolean>(() => {
+      return localStorage.getItem('save_to_history') === 'true';
    });
 
-   const toggleSaveToRoot = () => {
-      const newValue = !saveToRoot;
-      setSaveToRoot(newValue);
+   const toggleSaveToHistory = () => {
+      const newValue = !saveToHistory;
+      setSaveToHistory(newValue);
       if (newValue) {
-         localStorage.setItem('save_to_root', 'true');
+         localStorage.setItem('save_to_history', 'true');
       } else {
-         localStorage.removeItem('save_to_root');
+         localStorage.removeItem('save_to_history');
       }
    };
 
@@ -87,18 +87,18 @@ const Landing = () => {
                      <div className="flex items-center gap-2 mb-4">
                         <input
                            type="checkbox"
-                           id="saveToRoot"
-                           checked={saveToRoot}
-                           onChange={toggleSaveToRoot}
+                           id="saveToHistory"
+                           checked={saveToHistory}
+                           onChange={toggleSaveToHistory}
                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
-                        <label htmlFor="saveToRoot" className="text-sm font-medium text-gray-200 select-none cursor-pointer">
-                           Save to Root (Private)
+                        <label htmlFor="saveToHistory" className="text-sm font-medium text-gray-200 select-none cursor-pointer">
+                           Save to history
                         </label>
                      </div>
                   )}
 
-                  <Uploader uploadOptions={{ isPrivate: saveToRoot && isAuthenticated }} />
+                  <Uploader uploadOptions={{ saveToHistory: saveToHistory && isAuthenticated }} />
                </div>
 
                {/* Right Column */}

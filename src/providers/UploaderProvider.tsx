@@ -2,13 +2,13 @@ import { createContext, useContext, type ReactNode, useState, useMemo, useCallba
 import { useUpload } from "../hooks/useUpload";
 import FileItem from "../../types/response/FileItem";
 
-interface UploadSession {
+export interface UploadSession {
    id: string;
    files: File[];
    totalSize: number;
    uploadedSize: number;
    progress: number;
-   isUploading: boolean;
+   status: 'pending' | 'uploading' | 'completed' | 'error' | 'cancelled';
    error?: string;
    uploadedFiles: FileItem[];
    startTime: number;
@@ -17,6 +17,8 @@ interface UploadSession {
    useChunkedUpload?: boolean;
    folderId?: string | null;
    isPrivate?: boolean;
+   saveToHistory?: boolean;
+   fileName?: string; // Primary file name for display
 }
 
 export interface UploadOptions {
@@ -26,31 +28,43 @@ export interface UploadOptions {
    chunkThreshold?: number;
    folderId?: string | null;
    isPrivate?: boolean;
+   saveToHistory?: boolean;
 }
 
 type UploaderContextType = {
-   // Current upload state
+   // All active upload sessions
+   sessions: UploadSession[];
+
+   // Convenience getters
    isUploading: boolean;
-   error?: unknown;
-   progress: number;
-   uploadedFiles: FileItem[];
-   currentSession: UploadSession | null;
+   activeSessionCount: number;
+   totalProgress: number; // Overall progress across all sessions
 
    // Upload methods
-   uploadFile: (files: File[], options?: UploadOptions) => void;
-   uploadFileChunked: (file: File, options?: UploadOptions) => void;
+   uploadFile: (files: File[], options?: UploadOptions) => string; // Returns session ID
+   uploadFileChunked: (file: File, options?: UploadOptions) => string;
 
    // Session management
-   cancelUpload: () => void;
-   clearUploaded: () => void;
+   cancelSession: (sessionId: string) => void;
+   cancelAllSessions: () => void;
+   removeSession: (sessionId: string) => void;
+   clearCompletedSessions: () => void;
 
-   // Upload stats
+   // Upload stats (for current/active sessions)
    uploadSpeed: number; // bytes per second
    estimatedTimeRemaining: number; // seconds
 
    // History
    uploadHistory: UploadSession[];
    clearHistory: () => void;
+
+   // For backward compatibility
+   error?: unknown;
+   progress: number;
+   uploadedFiles: FileItem[];
+   currentSession: UploadSession | null;
+   cancelUpload: () => void;
+   clearUploaded: () => void;
 };
 
 const UploaderContext = createContext<UploaderContextType | undefined>(undefined);
@@ -61,8 +75,7 @@ const generateSessionId = (): string => {
 };
 
 export const UploaderProvider = ({ children }: { children: ReactNode }) => {
-   const [currentSession, setCurrentSession] = useState<UploadSession | null>(null);
-   const [uploadedFiles, setUploadedFiles] = useState<FileItem[]>([]);
+   const [sessions, setSessions] = useState<UploadSession[]>([]);
    const [uploadHistory, setUploadHistory] = useState<UploadSession[]>([]);
    const [uploadSpeed, setUploadSpeed] = useState(0);
    const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(0);
@@ -70,6 +83,7 @@ export const UploaderProvider = ({ children }: { children: ReactNode }) => {
    const uploadMutation = useUpload();
    const lastProgressUpdate = useRef<number>(0);
    const lastProgressValue = useRef<number>(0);
+   const activeUploadRef = useRef<Map<string, boolean>>(new Map());
 
    // Calculate upload speed and ETA
    const updateUploadStats = useCallback((progress: number, session: UploadSession) => {
@@ -96,20 +110,22 @@ export const UploaderProvider = ({ children }: { children: ReactNode }) => {
 
    // Progress handler that updates session and stats
    const handleProgress = useCallback(
-      (progress: number) => {
-         setCurrentSession((prev) => {
-            if (!prev) return null;
+      (sessionId: string, progress: number) => {
+         setSessions((prev) =>
+            prev.map((session) => {
+               if (session.id !== sessionId) return session;
 
-            const updatedSession = {
-               ...prev,
-               progress,
-               uploadedSize: (progress / 100) * prev.totalSize,
-            };
+               const updatedSession = {
+                  ...session,
+                  progress,
+                  uploadedSize: (progress / 100) * session.totalSize,
+               };
 
-            updateUploadStats(progress, updatedSession);
+               updateUploadStats(progress, updatedSession);
 
-            return updatedSession;
-         });
+               return updatedSession;
+            })
+         );
       },
       [updateUploadStats]
    );
@@ -157,91 +173,98 @@ export const UploaderProvider = ({ children }: { children: ReactNode }) => {
       };
    }, []);
 
-   // Main upload function
+   // Main upload function - now supports multiple concurrent uploads
    const uploadFile = useCallback(
-      (files: File[], options?: UploadOptions) => {
-         if (files.length === 0) return;
+      (files: File[], options?: UploadOptions): string => {
+         if (files.length === 0) return '';
 
+         const sessionId = generateSessionId();
          const totalSize = files.reduce((sum, file) => sum + file.size, 0);
          const optimalSettings = getOptimalUploadSettings(files);
          const finalOptions = { ...optimalSettings, ...options };
 
          const session: UploadSession = {
-            id: generateSessionId(),
+            id: sessionId,
             files,
             totalSize,
             uploadedSize: 0,
             progress: 0,
-            isUploading: true,
+            status: 'uploading',
             uploadedFiles: [],
             startTime: Date.now(),
+            fileName: files.length === 1 ? files[0].name : `${files.length} files`,
             ...finalOptions,
          };
 
-         setCurrentSession(session);
+         setSessions((prev) => [...prev, session]);
+         activeUploadRef.current.set(sessionId, true);
          lastProgressUpdate.current = Date.now();
          lastProgressValue.current = 0;
-         setUploadSpeed(0);
-         setEstimatedTimeRemaining(0);
 
-         uploadMutation.reset();
          uploadMutation.mutate(
             {
                file: files,
-               onUploadProgress: handleProgress,
+               onUploadProgress: (progress: number) => handleProgress(sessionId, progress),
                ...finalOptions,
             },
             {
                onSuccess: (data) => {
-                  setCurrentSession((prev) => {
-                     if (!prev) return null;
+                  if (!activeUploadRef.current.get(sessionId)) return; // Was cancelled
 
-                     const completedSession = {
-                        ...prev,
-                        isUploading: false,
-                        progress: 100,
-                        uploadedSize: prev.totalSize,
-                        uploadedFiles: data,
-                     };
+                  setSessions((prev) =>
+                     prev.map((s) => {
+                        if (s.id !== sessionId) return s;
 
-                     // Add to history
-                     setUploadHistory((history) => [...history, completedSession]);
+                        const completedSession: UploadSession = {
+                           ...s,
+                           status: 'completed',
+                           progress: 100,
+                           uploadedSize: s.totalSize,
+                           uploadedFiles: data,
+                        };
 
-                     return completedSession;
-                  });
+                        // Add to history
+                        setUploadHistory((history) => [...history, completedSession]);
 
-                  setUploadedFiles((prev) => [...prev, ...data]);
-                  setUploadSpeed(0);
-                  setEstimatedTimeRemaining(0);
+                        return completedSession;
+                     })
+                  );
+
+                  activeUploadRef.current.delete(sessionId);
                },
                onError: (error) => {
-                  setCurrentSession((prev) => {
-                     if (!prev) return null;
+                  if (!activeUploadRef.current.get(sessionId)) return; // Was cancelled
 
-                     const failedSession = {
-                        ...prev,
-                        isUploading: false,
-                        error: error instanceof Error ? error.message : "Upload failed",
-                     };
+                  setSessions((prev) =>
+                     prev.map((s) => {
+                        if (s.id !== sessionId) return s;
 
-                     // Add to history
-                     setUploadHistory((history) => [...history, failedSession]);
+                        const failedSession: UploadSession = {
+                           ...s,
+                           status: 'error',
+                           error: error instanceof Error ? error.message : "Upload failed",
+                        };
 
-                     return failedSession;
-                  });
+                        // Add to history
+                        setUploadHistory((history) => [...history, failedSession]);
 
-                  setUploadSpeed(0);
-                  setEstimatedTimeRemaining(0);
+                        return failedSession;
+                     })
+                  );
+
+                  activeUploadRef.current.delete(sessionId);
                },
             }
          );
+
+         return sessionId;
       },
       [uploadMutation, handleProgress, getOptimalUploadSettings]
    );
 
    // Chunked upload convenience function
    const uploadFileChunked = useCallback(
-      (file: File, options?: UploadOptions) => {
+      (file: File, options?: UploadOptions): string => {
          const chunkOptions = {
             useChunkedUpload: true,
             chunkSize: 5 * 1024 * 1024,
@@ -249,22 +272,22 @@ export const UploaderProvider = ({ children }: { children: ReactNode }) => {
             ...options,
          };
 
-         uploadFile([file], chunkOptions);
+         return uploadFile([file], chunkOptions);
       },
       [uploadFile]
    );
 
-   // Cancel current upload
-   const cancelUpload = useCallback(() => {
-      if (currentSession?.isUploading) {
-         uploadMutation.reset();
+   // Cancel a specific session
+   const cancelSession = useCallback((sessionId: string) => {
+      activeUploadRef.current.delete(sessionId);
 
-         setCurrentSession((prev) => {
-            if (!prev) return null;
+      setSessions((prev) =>
+         prev.map((s) => {
+            if (s.id !== sessionId) return s;
 
-            const cancelledSession = {
-               ...prev,
-               isUploading: false,
+            const cancelledSession: UploadSession = {
+               ...s,
+               status: 'cancelled',
                error: "Upload cancelled by user",
             };
 
@@ -272,16 +295,40 @@ export const UploaderProvider = ({ children }: { children: ReactNode }) => {
             setUploadHistory((history) => [...history, cancelledSession]);
 
             return cancelledSession;
-         });
+         })
+      );
+   }, []);
 
-         setUploadSpeed(0);
-         setEstimatedTimeRemaining(0);
-      }
-   }, [currentSession, uploadMutation]);
+   // Cancel all active sessions
+   const cancelAllSessions = useCallback(() => {
+      activeUploadRef.current.clear();
 
-   // Clear uploaded files
-   const clearUploaded = useCallback(() => {
-      setUploadedFiles([]);
+      setSessions((prev) =>
+         prev.map((s) => {
+            if (s.status !== 'uploading') return s;
+
+            const cancelledSession: UploadSession = {
+               ...s,
+               status: 'cancelled',
+               error: "Upload cancelled by user",
+            };
+
+            setUploadHistory((history) => [...history, cancelledSession]);
+
+            return cancelledSession;
+         })
+      );
+   }, []);
+
+   // Remove a session from the list
+   const removeSession = useCallback((sessionId: string) => {
+      activeUploadRef.current.delete(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+   }, []);
+
+   // Clear completed sessions
+   const clearCompletedSessions = useCallback(() => {
+      setSessions((prev) => prev.filter((s) => s.status === 'uploading' || s.status === 'pending'));
    }, []);
 
    // Clear upload history
@@ -289,22 +336,40 @@ export const UploaderProvider = ({ children }: { children: ReactNode }) => {
       setUploadHistory([]);
    }, []);
 
+   // Computed values
+   const activeSessions = sessions.filter((s) => s.status === 'uploading');
+   const isUploading = activeSessions.length > 0;
+   const activeSessionCount = activeSessions.length;
+
+   const totalProgress = sessions.length > 0
+      ? sessions.reduce((sum, s) => sum + s.progress, 0) / sessions.length
+      : 0;
+
+   // Get all uploaded files from completed sessions
+   const uploadedFiles = sessions
+      .filter((s) => s.status === 'completed')
+      .flatMap((s) => s.uploadedFiles);
+
+   // For backward compatibility
+   const currentSession = sessions.find((s) => s.status === 'uploading') || null;
+
    const value = useMemo(
       () => ({
-         // Current state
-         isUploading: uploadMutation.isLoading || (currentSession?.isUploading ?? false),
-         error: uploadMutation.error,
-         progress: currentSession?.progress ?? 0,
-         uploadedFiles,
-         currentSession,
+         // New multi-session API
+         sessions,
+         isUploading,
+         activeSessionCount,
+         totalProgress,
 
          // Upload methods
          uploadFile,
          uploadFileChunked,
 
          // Session management
-         cancelUpload,
-         clearUploaded,
+         cancelSession,
+         cancelAllSessions,
+         removeSession,
+         clearCompletedSessions,
 
          // Upload stats
          uploadSpeed,
@@ -313,20 +378,33 @@ export const UploaderProvider = ({ children }: { children: ReactNode }) => {
          // History
          uploadHistory,
          clearHistory,
+
+         // Backward compatibility
+         error: uploadMutation.error,
+         progress: currentSession?.progress ?? 0,
+         uploadedFiles,
+         currentSession,
+         cancelUpload: cancelAllSessions,
+         clearUploaded: clearCompletedSessions,
       }),
       [
-         uploadMutation.isLoading,
-         uploadMutation.error,
-         currentSession,
-         uploadedFiles,
+         sessions,
+         isUploading,
+         activeSessionCount,
+         totalProgress,
          uploadFile,
          uploadFileChunked,
-         cancelUpload,
-         clearUploaded,
+         cancelSession,
+         cancelAllSessions,
+         removeSession,
+         clearCompletedSessions,
          uploadSpeed,
          estimatedTimeRemaining,
          uploadHistory,
          clearHistory,
+         uploadMutation.error,
+         currentSession,
+         uploadedFiles,
       ]
    );
 

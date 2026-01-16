@@ -15,6 +15,7 @@ type UploadFileParams = {
    chunkThreshold?: number; // Size threshold for chunked upload
    folderId?: string | null;
    isPrivate?: boolean;
+   saveToHistory?: boolean;
 };
 
 interface ChunkUploadTask {
@@ -68,6 +69,7 @@ const uploadSingleChunk = async (
    task: ChunkUploadTask,
    server: string,
    token: string | null,
+   userId: string | null,
    folderId: string | null | undefined,
    isPrivate: boolean | undefined,
    onChunkProgress: (chunkIndex: number, progress: number) => void,
@@ -103,6 +105,7 @@ const uploadSingleChunk = async (
          headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "multipart/form-data",
+            ...(userId && { "X-User-Id": userId }),
          },
          onUploadProgress: (progressEvent) => {
             const chunkProgress = progressEvent.total ? (progressEvent.loaded / progressEvent.total) * 100 : 0;
@@ -134,7 +137,7 @@ const uploadSingleChunk = async (
          const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Max 10s delay
          await sleep(delay);
 
-         return uploadSingleChunk({ ...task, retryCount: retryCount + 1 }, server, token, folderId, isPrivate, onChunkProgress, signal);
+         return uploadSingleChunk({ ...task, retryCount: retryCount + 1 }, server, token, userId, folderId, isPrivate, onChunkProgress, signal);
       }
 
       return {
@@ -186,6 +189,7 @@ class ChunkUploadManager {
       tasks: ChunkUploadTask[],
       server: string,
       token: string | null,
+      userId: string | null,
       folderId: string | null | undefined,
       isPrivate: boolean | undefined,
       maxConcurrency: number
@@ -196,7 +200,7 @@ class ChunkUploadManager {
       for (const task of tasks) {
          const promise = semaphore.acquire().then(async (release) => {
             try {
-               const result = await uploadSingleChunk(task, server, token, folderId, isPrivate, this.onChunkProgress, this.abortController.signal);
+               const result = await uploadSingleChunk(task, server, token, userId, folderId, isPrivate, this.onChunkProgress, this.abortController.signal);
 
                if (result.success) {
                   this.completedChunks.add(result.chunkIndex);
@@ -243,6 +247,7 @@ class ChunkUploadManager {
          {
             headers: {
                Authorization: `Bearer ${token}`,
+               ...(userId && { "X-User-Id": userId }),
             },
          }
       );
@@ -296,6 +301,7 @@ const uploadFile = async ({
    file,
    server,
    token,
+   userId,
    folderId,
    isPrivate,
    onUploadProgress,
@@ -303,6 +309,7 @@ const uploadFile = async ({
    file: File[];
    server: string;
    token: string | null;
+   userId: string | null;
    folderId?: string | null;
    isPrivate?: boolean;
    onUploadProgress: (progress: number) => void;
@@ -320,6 +327,7 @@ const uploadFile = async ({
       headers: {
          Authorization: `Bearer ${token}`,
          "Content-Type": "multipart/form-data",
+         ...(userId && { "X-User-Id": userId }),
       },
       params,
       onUploadProgress: (progressEvent) => {
@@ -340,6 +348,7 @@ const uploadFileChunkedConcurrent = async ({
    file,
    server,
    token,
+   userId,
    folderId,
    isPrivate,
    onUploadProgress,
@@ -349,6 +358,7 @@ const uploadFileChunkedConcurrent = async ({
    file: File;
    server: string;
    token: string | null;
+   userId: string | null;
    folderId?: string | null;
    isPrivate?: boolean;
    onUploadProgress: (progress: number) => void;
@@ -395,7 +405,7 @@ const uploadFileChunkedConcurrent = async ({
    const manager = new ChunkUploadManager(totalChunks, onUploadProgress);
 
    try {
-      return await manager.uploadChunksConcurrently(tasks, server, token, folderId, isPrivate, maxConcurrency);
+      return await manager.uploadChunksConcurrently(tasks, server, token, userId, folderId, isPrivate, maxConcurrency);
    } catch (error) {
       manager.abort();
       throw error;
@@ -407,6 +417,7 @@ const uploadFileEnhanced = async ({
    file,
    server,
    token,
+   userId,
    folderId,
    isPrivate,
    onUploadProgress,
@@ -418,6 +429,7 @@ const uploadFileEnhanced = async ({
    file: File[];
    server: string;
    token: string | null;
+   userId: string | null;
    folderId?: string | null;
    isPrivate?: boolean;
    onUploadProgress: (progress: number) => void;
@@ -454,6 +466,7 @@ const uploadFileEnhanced = async ({
          file: singleFile,
          server,
          token,
+         userId,
          folderId,
          isPrivate,
          onUploadProgress,
@@ -466,6 +479,7 @@ const uploadFileEnhanced = async ({
          file,
          server,
          token,
+         userId,
          folderId,
          isPrivate,
          onUploadProgress,
@@ -474,7 +488,7 @@ const uploadFileEnhanced = async ({
 };
 
 export const useUpload = () => {
-   const { token } = useAuth();
+   const { token, userId } = useAuth();
    const { currentServer } = useCurrentServer();
 
    return useMutation({
@@ -487,15 +501,21 @@ export const useUpload = () => {
          chunkThreshold = 8 * 1024 * 1024,
          folderId,
          isPrivate,
+         saveToHistory,
       }: UploadFileParams) => {
          if (!currentServer) {
             throw new Error("No server selected");
          }
 
+         // Use authenticated endpoint only when saveToHistory is true AND user is logged in
+         const useAuthenticatedUpload = saveToHistory && token;
+         const endpoint = useAuthenticatedUpload ? "upload" : "anon-upload";
+
          return uploadFileEnhanced({
             file,
-            server: `//${currentServer.domain}/${token ? "upload" : "anon-upload"}`,
-            token,
+            server: `//${currentServer.domain}/${endpoint}`,
+            token: useAuthenticatedUpload ? token : null,
+            userId: useAuthenticatedUpload ? userId : null,
             folderId,
             isPrivate,
             onUploadProgress,
@@ -510,7 +530,7 @@ export const useUpload = () => {
 
 // Convenience hook specifically for chunked uploads
 export const useChunkedUpload = (chunkSize: number = 5 * 1024 * 1024, maxConcurrency: number = 16) => {
-   const { token } = useAuth();
+   const { token, userId } = useAuth();
    const { currentServer } = useCurrentServer();
 
    return useMutation({
@@ -523,6 +543,7 @@ export const useChunkedUpload = (chunkSize: number = 5 * 1024 * 1024, maxConcurr
             file: [file],
             server: `//${currentServer.domain}/${token ? "upload" : "anon-upload"}`,
             token,
+            userId,
             onUploadProgress,
             chunkSize,
             useChunkedUpload: true,

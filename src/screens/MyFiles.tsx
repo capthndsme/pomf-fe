@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { BRANDING } from "@/constants";
@@ -17,10 +17,13 @@ import {
     Home,
     Loader2,
     Upload,
-    MoreVertical
+    MoreVertical,
+    Lock
 } from "lucide-react";
 import CreateFolderModal from "@/components/CreateFolderModal";
 import ShareFolderModal from "@/components/ShareFolderModal";
+import ShareFileModal from "@/components/ShareFileModal";
+import UploadQueue from "@/components/UploadQueue";
 import { useUploader } from "@/providers/UploaderProvider";
 import type FileItem from "../../types/response/FileItem";
 
@@ -49,16 +52,44 @@ const MyFiles = () => {
     const { folderId } = useParams<{ folderId: string }>();
     const navigate = useNavigate();
     const { } = useAuth();
-    const { uploadFile, isUploading, uploadedFiles, clearUploaded } = useUploader();
+    const { uploadFile, isUploading, sessions, clearCompletedSessions } = useUploader();
 
     const [files, setFiles] = useState<FileItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [breadcrumbs, setBreadcrumbs] = useState<Breadcrumb[]>([{ id: null, name: 'My Files' }]);
+    const [isBreadcrumbsLoading, setIsBreadcrumbsLoading] = useState(false);
 
     const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
+    const [showShareFileModal, setShowShareFileModal] = useState(false);
     const [selectedFolder, setSelectedFolder] = useState<FileItem | null>(null);
+    const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
+
+    // Fetch breadcrumbs when folder changes
+    const fetchBreadcrumbs = useCallback(async () => {
+        if (!folderId) {
+            setBreadcrumbs([{ id: null, name: 'My Files' }]);
+            return;
+        }
+
+        setIsBreadcrumbsLoading(true);
+        try {
+            const response = await axiosInstanceAuth.get(`/file/breadcrumbs/${folderId}`);
+            if (response.data?.status === 'success') {
+                setBreadcrumbs(response.data.data);
+            }
+        } catch (err) {
+            // Fallback to basic breadcrumb
+            console.error('Failed to fetch breadcrumbs:', err);
+            setBreadcrumbs([
+                { id: null, name: 'My Files' },
+                { id: folderId, name: 'Current Folder' }
+            ]);
+        } finally {
+            setIsBreadcrumbsLoading(false);
+        }
+    }, [folderId]);
 
     // Fetch files
     useEffect(() => {
@@ -88,29 +119,24 @@ const MyFiles = () => {
         };
 
         fetchFiles();
-    }, [folderId]);
-
-    // Update breadcrumbs when folder changes
-    useEffect(() => {
-        if (!folderId) {
-            setBreadcrumbs([{ id: null, name: 'My Files' }]);
-        }
-        // Note: For full breadcrumb support, we'd need to fetch parent folders
-        // This is a simplified implementation
-    }, [folderId]);
+        fetchBreadcrumbs();
+    }, [folderId, fetchBreadcrumbs]);
 
     // Refresh list when uploads complete
     useEffect(() => {
-        if (uploadedFiles.length > 0) {
+        const completedSessions = sessions.filter(s => s.status === 'completed');
+        if (completedSessions.length > 0) {
+            // Add newly uploaded files to the list
+            const newFiles = completedSessions.flatMap(s => s.uploadedFiles);
             setFiles(prev => {
-                const newFiles = uploadedFiles.filter(uf => !prev.some(p => p.id === uf.id));
-                if (newFiles.length === 0) return prev;
-                // Add new files to the beginning of the list
-                return [...newFiles, ...prev];
+                const existingIds = new Set(prev.map(p => p.id));
+                const filesToAdd = newFiles.filter(f => !existingIds.has(f.id));
+                if (filesToAdd.length === 0) return prev;
+                return [...filesToAdd, ...prev];
             });
-            clearUploaded();
+            clearCompletedSessions();
         }
-    }, [uploadedFiles, clearUploaded]);
+    }, [sessions, clearCompletedSessions]);
 
     const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -132,9 +158,14 @@ const MyFiles = () => {
         }
     };
 
-    const handleShareClick = (folder: FileItem) => {
-        setSelectedFolder(folder);
-        setShowShareModal(true);
+    const handleShareClick = (item: FileItem) => {
+        if (item.isFolder) {
+            setSelectedFolder(item);
+            setShowShareModal(true);
+        } else {
+            setSelectedFile(item);
+            setShowShareFileModal(true);
+        }
     };
 
     const handleFolderCreated = (newFolder: FileItem) => {
@@ -155,19 +186,24 @@ const MyFiles = () => {
                         <h1 className="text-2xl font-bold text-white mb-2">My Files</h1>
 
                         {/* Breadcrumbs */}
-                        <nav className="flex items-center gap-1 text-sm text-white/60">
-                            {breadcrumbs.map((crumb, index) => (
-                                <span key={crumb.id ?? 'root'} className="flex items-center gap-1">
-                                    {index > 0 && <ChevronRight size={14} />}
-                                    <button
-                                        onClick={() => crumb.id ? navigate(`/my-files/${crumb.id}`) : navigate('/my-files')}
-                                        className="hover:text-white transition-colors flex items-center gap-1"
-                                    >
-                                        {index === 0 && <Home size={14} />}
-                                        {crumb.name}
-                                    </button>
-                                </span>
-                            ))}
+                        <nav className="flex items-center gap-1 text-sm text-white/60 flex-wrap">
+                            {isBreadcrumbsLoading ? (
+                                <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                                breadcrumbs.map((crumb, index) => (
+                                    <span key={crumb.id ?? 'root'} className="flex items-center gap-1">
+                                        {index > 0 && <ChevronRight size={14} className="flex-shrink-0" />}
+                                        <button
+                                            onClick={() => crumb.id ? navigate(`/my-files/${crumb.id}`) : navigate('/my-files')}
+                                            className={`hover:text-white transition-colors flex items-center gap-1 ${index === breadcrumbs.length - 1 ? 'text-white font-medium' : ''
+                                                }`}
+                                        >
+                                            {index === 0 && <Home size={14} className="flex-shrink-0" />}
+                                            <span className="truncate max-w-[150px]">{crumb.name}</span>
+                                        </button>
+                                    </span>
+                                ))
+                            )}
                         </nav>
                     </div>
 
@@ -248,7 +284,14 @@ const MyFiles = () => {
                                             </span>
                                         )}
                                         <div className="min-w-0">
-                                            <p className="font-medium text-white truncate">{file.name}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-medium text-white truncate">{file.name}</p>
+                                                {file.isPrivate && (
+                                                    <span title="Private">
+                                                        <Lock size={12} className="text-yellow-400 flex-shrink-0" />
+                                                    </span>
+                                                )}
+                                            </div>
                                             <p className="text-sm text-white/40">
                                                 {file.isFolder ? 'Folder' : formatFileSize(file.fileSize)}
                                             </p>
@@ -257,18 +300,16 @@ const MyFiles = () => {
 
                                     {/* Actions */}
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {file.isFolder && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleShareClick(file);
-                                                }}
-                                                className="p-2 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
-                                                title="Share folder"
-                                            >
-                                                <Share2 size={16} />
-                                            </button>
-                                        )}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleShareClick(file);
+                                            }}
+                                            className="p-2 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                                            title={file.isFolder ? "Share folder" : "Share file"}
+                                        >
+                                            <Share2 size={16} />
+                                        </button>
                                         <button
                                             onClick={(e) => e.stopPropagation()}
                                             className="p-2 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
@@ -282,6 +323,9 @@ const MyFiles = () => {
                     </div>
                 )}
             </div>
+
+            {/* Upload Queue */}
+            <UploadQueue />
 
             {/* Modals */}
             {showCreateFolderModal && (
@@ -298,6 +342,20 @@ const MyFiles = () => {
                     onClose={() => {
                         setShowShareModal(false);
                         setSelectedFolder(null);
+                    }}
+                />
+            )}
+
+            {showShareFileModal && selectedFile && (
+                <ShareFileModal
+                    file={{
+                        id: selectedFile.id,
+                        name: selectedFile.name,
+                        isPrivate: selectedFile.isPrivate ?? undefined
+                    }}
+                    onClose={() => {
+                        setShowShareFileModal(false);
+                        setSelectedFile(null);
                     }}
                 />
             )}

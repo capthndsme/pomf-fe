@@ -41,13 +41,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     } else {
                         // Token invalid, clear auth
                         clearAuthState();
-                        localStorage.removeItem('save_to_root');
+                        localStorage.removeItem('save_to_history');
                         setAuthInternal({ userId: null, token: null, user: null });
                     }
                 } catch {
                     // Token verification failed, clear auth
                     clearAuthState();
-                    localStorage.removeItem('save_to_root');
+                    localStorage.removeItem('save_to_history');
                     setAuthInternal({ userId: null, token: null, user: null });
                 }
             }
@@ -62,46 +62,64 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const clearAuth = useCallback(() => {
         clearAuthState();
-        localStorage.removeItem('save_to_root');
+        localStorage.removeItem('save_to_history');
         setAuthInternal({ userId: null, token: null, user: null });
     }, []);
 
     const login = useCallback(async (emailOrUsername: string, password: string) => {
         const isEmail = emailOrUsername.includes('@');
-        const response = await axiosInstance.post('/auth/login', {
-            [isEmail ? 'email' : 'username']: emailOrUsername,
-            password,
-        });
-
-        if (response.data?.status === 'success' && response.data?.data) {
-            const { user, token } = response.data.data;
-            setAuthInternal({
-                userId: user.id,
-                token,
-                user,
+        try {
+            const response = await axiosInstance.post('/auth/login', {
+                [isEmail ? 'email' : 'username']: emailOrUsername,
+                password,
             });
-        } else {
-            throw new Error(response.data?.message || 'Login failed');
+
+            if (response.data?.status === 'success' && response.data?.data) {
+                const { user, token } = response.data.data;
+                setAuthInternal({
+                    userId: user.id,
+                    token,
+                    user,
+                });
+            } else {
+                throw new Error(response.data?.message || 'Login failed');
+            }
+        } catch (error) {
+            // Handle axios error responses (non-2xx status codes)
+            if (error && typeof error === 'object' && 'response' in error) {
+                const axiosError = error as { response?: { data?: { message?: string } } };
+                throw new Error(axiosError.response?.data?.message || 'Login failed');
+            }
+            throw error;
         }
     }, []);
 
     const register = useCallback(async (email: string, username: string, password: string, fullName?: string) => {
-        const response = await axiosInstance.post('/auth/register', {
-            email,
-            username,
-            password,
-            fullName,
-        });
-
-        if (response.data?.status === 'success' && response.data?.data) {
-            const { user, token } = response.data.data;
-            setAuthInternal({
-                userId: user.id,
-                token,
-                user,
+        try {
+            const response = await axiosInstance.post('/auth/register', {
+                email,
+                username,
+                password,
+                fullName,
             });
-        } else {
-            throw new Error(response.data?.message || 'Registration failed');
+
+            if (response.data?.status === 'success' && response.data?.data) {
+                const { user, token } = response.data.data;
+                setAuthInternal({
+                    userId: user.id,
+                    token,
+                    user,
+                });
+            } else {
+                throw new Error(response.data?.message || 'Registration failed');
+            }
+        } catch (error) {
+            // Handle axios error responses (non-2xx status codes)
+            if (error && typeof error === 'object' && 'response' in error) {
+                const axiosError = error as { response?: { data?: { message?: string } } };
+                throw new Error(axiosError.response?.data?.message || 'Registration failed');
+            }
+            throw error;
         }
     }, []);
 
